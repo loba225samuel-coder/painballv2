@@ -7,15 +7,16 @@
   command = "npm run build"
   publish = "dist"
 
+# les salons privés passent par une Netlify Function (signalisation WebRTC)
+[functions]
+  directory = "netlify/functions"
+
 [build.environment]
   # Vite 7 requiert Node >= 20.19 ; on reste sur le LTS courant de Netlify.
   NODE_VERSION = "22"
   NPM_FLAGS = "--no-audit --no-fund"
   # Sortie unique (vite-plugin-singlefile) : pas besoin de cache long pour les chunks.
   GENERATE_SOURCEMAP = "false"
-  # À renseigner dans Netlify → Site configuration → Environment variables :
-  # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (clé publishable),
-  # VITE_MULTIPLAYER_URL (wss://… pour les salons en ligne).
 
 # --- Développement local avec la CLI Netlify ------------------------------
 [dev]

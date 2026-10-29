@@ -1,5 +1,5 @@
 import { Sfx } from "./audio";
-import { BONUS, DROP_TABLE, type BonusKind } from "./rules";
+import type { RemoteInput, Snapshot } from "./net";
 
 /* ------------------------------------------------------------------ *
  * PAINTBALL 2D — top-down arcade paintball arena
@@ -8,12 +8,44 @@ import { BONUS, DROP_TABLE, type BonusKind } from "./rules";
 
 export type Status = "menu" | "playing" | "paused" | "gameover";
 
-export interface PowerChip {
-  id: string;
-  name: string;
-  pct: number;
-  color: string;
-  charges?: number;
+export interface Pilot {
+  i: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  angle: number;
+  hp: number;
+  maxHp: number;
+  invuln: number;
+  ammo: number;
+  mag: number;
+  reload: number;
+  reloadFrom: number;
+  fireT: number;
+  bloom: number;
+  dashT: number;
+  dashCd: number;
+  dashX: number;
+  dashY: number;
+  tripleT: number;
+  rapidT: number;
+  hitFlash: number;
+  step: number;
+  dead: boolean;
+  shield: number;
+  ricochetT: number;
+  boomT: number;
+}
+
+export interface PilotHud {
+  shield: number;
+  hp: number;
+  maxHp: number;
+  ammo: number;
+  mag: number;
+  dead: boolean;
 }
 
 export interface HudState {
@@ -31,50 +63,23 @@ export interface HudState {
   dashPct: number;
   powerName: string;
   powerPct: number;
-  powers: PowerChip[];
+  duo: boolean;
+  shield: number;
+  p2: PilotHud | null;
 }
 
 export interface RunResult {
+  duo: boolean;
   score: number;
   wave: number;
   kills: number;
+  kills2: number;
   shots: number;
   hits: number;
+  hits2: number;
   maxCombo: number;
   coverage: number;
   time: number;
-}
-
-/** Partie solo en cours, sérialisable (localStorage + Supabase). */
-export interface SavedRun {
-  v: 1;
-  mode: "solo";
-  savedAt: number;
-  label: string;
-  world: { w: number; h: number };
-  player: Record<string, number>;
-  score: number;
-  wave: number;
-  kills: number;
-  shots: number;
-  hits: number;
-  streak: number;
-  comboT: number;
-  maxCombo: number;
-  time: number;
-  spawnT: number;
-  between: number;
-  maxAlive: number;
-  enemies: Enemy[];
-  pickups: Pickup[];
-  telegraphs: Telegraph[];
-  pending: EType[];
-  gw: number;
-  gh: number;
-  covered: number[];
-  coveredCount: number;
-  /** image PNG/WebP du calque de peinture, réduite pour tenir en base */
-  paint: string;
 }
 
 interface Callbacks {
@@ -83,7 +88,7 @@ interface Callbacks {
   onGameOver: (r: RunResult) => void;
 }
 
-export type EType = "grunt" | "rusher" | "sniper" | "boss";
+type EType = "grunt" | "rusher" | "sniper" | "boss";
 
 export interface Enemy {
   type: EType;
@@ -109,7 +114,7 @@ export interface Enemy {
   born: number;
 }
 
-export interface Bullet {
+interface Bullet {
   x: number;
   y: number;
   vx: number;
@@ -119,8 +124,9 @@ export interface Bullet {
   dmg: number;
   color: string;
   foe: boolean;
-  bounces?: number;
-  explosive?: boolean;
+  owner: number;
+  bounce: number;
+  boom: boolean;
 }
 
 interface Particle {
@@ -139,16 +145,48 @@ interface Particle {
   text: string;
 }
 
-export interface Pickup {
+interface Pickup {
   x: number;
   y: number;
   vx: number;
   vy: number;
   t: number;
-  kind: BonusKind;
+  kind: number; // index PICKUPS
 }
 
-export interface Telegraph {
+interface Roller {
+  x: number;
+  y: number;
+  a: number;
+  t: number;
+  life: number;
+  speed: number;
+  w: number;
+  hit: Set<Enemy>;
+}
+
+/** Ramassages : label de la caisse, nom affiché, couleur, poids de drop. */
+const PICKUPS = [
+  { label: ">>", name: "OVERCLOCK", color: "#3ee8ff", weight: 22 },
+  { label: "+", name: "+PAINT", color: "#b9ff33", weight: 18 },
+  { label: "3x", name: "TRIPLE STREAM", color: "#ffd84d", weight: 18 },
+  { label: "S", name: "BOUCLIER", color: "#7ef4ff", weight: 16 },
+  { label: "R", name: "RICOCHET", color: "#a86bff", weight: 14 },
+  { label: "!", name: "BILLE EXPLOSIVE", color: "#ff8a1e", weight: 12 },
+  { label: "O", name: "ROULEAU", color: "#ff2f87", weight: 10 },
+];
+
+function rollPickup() {
+  const total = PICKUPS.reduce((a, b) => a + b.weight, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < PICKUPS.length; i++) {
+    r -= PICKUPS[i].weight;
+    if (r <= 0) return i;
+  }
+  return 0;
+}
+
+interface Telegraph {
   x: number;
   y: number;
   t: number;
@@ -189,6 +227,43 @@ const ENEMY_DEF: Record<EType, { hp: number; r: number; speed: number; score: nu
   boss: { hp: 420, r: 30, speed: 62, score: 1600, color: COL.boss },
 };
 
+export interface SaveState {
+  v: 1;
+  at: number;
+  label: string;
+  duo: boolean;
+  gw: number;
+  gh: number;
+  score: number;
+  wave: number;
+  kills: number;
+  shots: number;
+  hits: number;
+  streak: number;
+  maxCombo: number;
+  time: number;
+  between: number;
+  spawnT: number;
+  maxAlive: number;
+  pending: string[];
+  pilots: Pilot[];
+  enemies: Enemy[];
+  covered: string;
+  paint?: string;
+}
+
+function gridToB64(u8: Uint8Array) {
+  let out = "";
+  for (let i = 0; i < u8.length; i += 8192) out += String.fromCharCode(...u8.subarray(i, i + 8192));
+  return btoa(out);
+}
+function b64ToGrid(b64: string) {
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
 export class PaintballGame {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -219,17 +294,19 @@ export class PaintballGame {
   private splats = new Map<string, HTMLCanvasElement>();
   private glows = new Map<string, HTMLCanvasElement>();
   private splatV = 0;
-  private paintLoadId = 0;
 
   // entities
   private enemies: Enemy[] = [];
   private bullets: Bullet[] = [];
   private parts: Particle[] = [];
   private pickups: Pickup[] = [];
+  private rollers: Roller[] = [];
   private telegraphs: Telegraph[] = [];
   private banners: Banner[] = [];
 
-  private p = {
+  private p: Pilot = {
+    i: 0,
+    dead: false,
     x: 600,
     y: 350,
     vx: 0,
@@ -250,16 +327,21 @@ export class PaintballGame {
     dashY: 0,
     tripleT: 0,
     rapidT: 0,
-    shield: 0,
-    shieldT: 0,
-    ricochetT: 0,
-    explosive: 0,
-    rollerT: 0,
-    rollerTick: 0,
     hitFlash: 0,
     step: 0,
     reloadFrom: 0,
+    shield: 0,
+    ricochetT: 0,
+    boomT: 0,
   };
+  private p2: Pilot | null = null;
+  private duo = false;
+  /** index du pilote tenu par les commandes locales (1 côté client en ligne) */
+  private localIdx = 0;
+  private queued = { dash: false, reload: false };
+  private netPilot: { idx: number; input: RemoteInput | null } | null = null;
+  private killsBy = [0, 0];
+  private hitsBy = [0, 0];
 
   // run state
   private score = 0;
@@ -367,8 +449,13 @@ export class PaintballGame {
       return;
     }
     if (this.status !== "playing") return;
-    if (k === "KeyR") this.startReload();
-    if (k === "ShiftLeft" || k === "ShiftRight") this.tryDash();
+    if (k === "KeyR") this.startReload(this.localPilot());
+    if (k === "ShiftLeft") this.tryDash(this.localPilot());
+    if (k === "ShiftRight" || k === "ControlRight") {
+      if (this.p2) this.tryDash(this.p2);
+      else this.tryDash(this.localPilot());
+    }
+    if (this.p2 && (k === "Period" || k === "NumpadDecimal")) this.startReload(this.p2);
   };
 
   private onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.code);
@@ -411,14 +498,14 @@ export class PaintballGame {
     if (this.status === "playing" && this.hitBtn(px, py, "dash")) {
       b.dash.id = e.pointerId;
       b.dash.press = 0.16;
-      this.tryDash();
+      this.tryDash(this.p);
       this.capture(e.pointerId);
       return;
     }
     if (this.status === "playing" && this.hitBtn(px, py, "reload")) {
       b.reload.id = e.pointerId;
       b.reload.press = 0.16;
-      this.startReload();
+      this.startReload(this.localPilot());
       this.capture(e.pointerId);
       return;
     }
@@ -515,6 +602,63 @@ export class PaintballGame {
     }
   };
 
+  /** les pilotes vivants de la partie */
+  private pilots(): Pilot[] {
+    return this.p2 ? [this.p, this.p2] : [this.p];
+  }
+
+  private makePilot(i: number): Pilot {
+    return {
+      i,
+      dead: false,
+      x: this.W / 2 + (i === 0 ? -52 : 52),
+      y: this.H * 0.72,
+      vx: 0,
+      vy: 0,
+      r: 15,
+      angle: -Math.PI / 2,
+      hp: 6,
+      maxHp: 6,
+      invuln: 1.2,
+      ammo: 12,
+      mag: 12,
+      reload: 0,
+      reloadFrom: 0,
+      fireT: 0,
+      bloom: 0,
+      dashT: 0,
+      dashCd: 0,
+      dashX: 0,
+      dashY: 0,
+      tripleT: 0,
+      rapidT: 0,
+      hitFlash: 0,
+      step: 0,
+      shield: 0,
+      ricochetT: 0,
+      boomT: 0,
+    };
+  }
+
+  /** pilote le plus proche d'un point (pour l'IA et les tirs) */
+  private nearestPilot(x: number, y: number): { p: Pilot; idx: number } | null {
+    let best: Pilot | null = null;
+    let bd = 1e9;
+    for (const pl of this.pilots()) {
+      if (pl.dead) continue;
+      const d = Math.hypot(pl.x - x, pl.y - y);
+      if (d < bd) {
+        bd = d;
+        best = pl;
+      }
+    }
+    return best ? { p: best, idx: best.i } : null;
+  }
+
+  private allDown() {
+    return this.pilots().every((pl) => pl.dead);
+  }
+
   private get stickR() {
     return Math.min(74, Math.max(52, this.cssW * 0.06));
   }
@@ -529,28 +673,14 @@ export class PaintballGame {
   /* ---------------- arena / view ---------------- */
 
   resize() {
-    // Mesurer le conteneur, jamais le canvas : le canvas peut encore avoir
-    // sa taille en pixels de l'orientation précédente.
-    const host = this.canvas.parentElement ?? this.canvas;
-    const rect = host.getBoundingClientRect();
-    const vw = window.visualViewport?.width ?? window.innerWidth;
-    const vh = window.visualViewport?.height ?? window.innerHeight;
-    const cssW = Math.max(280, Math.round(rect.width || vw));
-    const cssH = Math.max(240, Math.round(rect.height || vh));
-    // préserver la partie en cours pendant une rotation / un redimensionnement
-    const prevW = this.W;
-    const prevH = this.H;
-    const prevGw = this.gw;
-    const prevGh = this.gh;
-    const inRun = this.status === "playing" || this.status === "paused";
-    const prevCovered = inRun && this.covered ? this.covered.slice() : null;
-    let prevPaint: HTMLCanvasElement | null = null;
-    if (inRun && this.paint.width > 0 && this.paint.height > 0) {
-      prevPaint = document.createElement("canvas");
-      prevPaint.width = this.paint.width;
-      prevPaint.height = this.paint.height;
-      prevPaint.getContext("2d")!.drawImage(this.paint, 0, 0);
+    const rect = this.canvas.getBoundingClientRect();
+    // pendant un layout mobile, la mesure peut être nulle : on retentera plus tard
+    if (rect.width < 2 || rect.height < 2) {
+      this.sizeDirty = true;
+      return;
     }
+    const cssW = Math.max(280, rect.width || window.innerWidth);
+    const cssH = Math.max(240, rect.height || window.innerHeight);
     // adaptive pixel density: keep big phone screens glued to 60fps
     const raw = window.devicePixelRatio || 1;
     const dpr = cssW * cssH > 1_350_000 ? Math.min(1.25, raw) : Math.min(2, raw);
@@ -570,10 +700,11 @@ export class PaintballGame {
     this.s = s;
     this.W = cssW / s;
     this.H = cssH / s;
+    // la taille AFFICHÉE reste pilotée par le CSS (w-full h-full) : on ne touche
+    // qu'à la résolution interne. Figer style.width/height laissait le canvas
+    // bloqué sur la première mesure (barre d'URL mobile) → jeu réduit à un coin.
     this.canvas.width = Math.round(cssW * dpr);
     this.canvas.height = Math.round(cssH * dpr);
-    this.canvas.style.width = "100%";
-    this.canvas.style.height = "100%";
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.dpr = dpr;
 
@@ -598,54 +729,6 @@ export class PaintballGame {
     this.maxParts = this.isTouch ? 430 : 760;
 
     this.buildArena();
-
-    // re-projeter l'ancien monde dans le nouveau (même court, proportions conservées)
-    if (prevW > 0 && prevH > 0 && (inRun || this.enemies.length)) {
-      const sx = this.W / prevW;
-      const sy = this.H / prevH;
-      this.p.x *= sx;
-      this.p.y *= sy;
-      this.p.vx *= sx;
-      this.p.vy *= sy;
-      this.collideRect(this.p, this.p.r);
-      for (const e of this.enemies) {
-        e.x *= sx;
-        e.y *= sy;
-        e.vx *= sx;
-        e.vy *= sy;
-        this.collideRect(e, e.r);
-      }
-      for (const q of this.pickups) {
-        q.x *= sx;
-        q.y *= sy;
-      }
-      for (const t of this.telegraphs) {
-        t.x *= sx;
-        t.y *= sy;
-      }
-      this.bullets.length = 0;
-      this.parts.length = 0;
-      if (prevCovered && prevGw > 0 && prevGh > 0) {
-        this.covered.fill(0);
-        this.coveredCount = 0;
-        if (prevGw === this.gw && prevGh === this.gh && prevCovered.length === this.covered.length) {
-          for (let i = 0; i < prevCovered.length; i++) {
-            if (prevCovered[i]) {
-              this.covered[i] = 1;
-              this.coveredCount++;
-            }
-          }
-        } else {
-          for (let y = 0; y < prevGh; y++) {
-            for (let x = 0; x < prevGw; x++) {
-              if (!prevCovered[y * prevGw + x]) continue;
-              this.mark(((x + 0.5) / prevGw) * this.W, ((y + 0.5) / prevGh) * this.H);
-            }
-          }
-        }
-      }
-      if (prevPaint) this.paintCtx.drawImage(prevPaint, 0, 0, this.W, this.H);
-    }
   }
 
   /** cluster de boutons sous le pouce droit + Repères des sticks */
@@ -672,6 +755,17 @@ export class PaintballGame {
     this.home.ay = bandBot - R > bandTop ? bandBot - R : cssH * 0.45;
   }
   private dpr = 1;
+  private sizeDirty = true;
+  private frameCount = 0;
+
+  /** Détecte un changement de taille non signalé (barre d'URL, rotation, clavier). */
+  private checkSize() {
+    const r = this.canvas.getBoundingClientRect();
+    if (Math.abs(r.width - this.cssW) > 2 || Math.abs(r.height - this.cssH) > 2 || this.sizeDirty) {
+      this.sizeDirty = false;
+      this.resize();
+    }
+  }
 
   private buildArena() {
     const { W, H } = this;
@@ -701,11 +795,41 @@ export class PaintballGame {
       h: Math.max(46, h * u),
     }));
 
+    // une rotation ne doit JAMAIS effacer la partie : on conserve peinture et
+    // couverture, simplement rééchantillonnées sur la nouvelle taille.
+    const oldGrid = this.covered;
+    const oldGw = this.gw;
+    const oldGh = this.gh;
+    const oldPaint = this.paint;
+    const oldPW = oldPaint.width;
+    const oldPH = oldPaint.height;
+
     this.cell = 46;
     this.gw = Math.max(1, Math.ceil(W / this.cell));
     this.gh = Math.max(1, Math.ceil(H / this.cell));
     this.covered = new Uint8Array(this.gw * this.gh);
     this.coveredCount = 0;
+    if (oldGrid && oldGrid.length) {
+      if (oldGw === this.gw && oldGh === this.gh && oldGrid.length === this.covered.length) {
+        this.covered.set(oldGrid);
+        for (let i = 0; i < oldGrid.length; i++) if (oldGrid[i]) this.coveredCount++;
+      } else if (oldGw > 0 && oldGh > 0) {
+        // on projette l'ANCIENNE grille dans la nouvelle (et non l'inverse) :
+        // aucune cellule peinte n'est perdue quand le format de l'écran change.
+        for (let oy = 0; oy < oldGh; oy++) {
+          for (let ox = 0; ox < oldGw; ox++) {
+            if (!oldGrid[oy * oldGw + ox]) continue;
+            const nx = Math.min(this.gw - 1, Math.floor((ox / oldGw) * this.gw));
+            const ny = Math.min(this.gh - 1, Math.floor((oy / oldGh) * this.gh));
+            const i = ny * this.gw + nx;
+            if (!this.covered[i]) {
+              this.covered[i] = 1;
+              this.coveredCount++;
+            }
+          }
+        }
+      }
+    }
 
     const fw = Math.round(W + PAD * 2);
     const fh = Math.round(H + PAD * 2);
@@ -714,7 +838,13 @@ export class PaintballGame {
     this.paint.width = Math.round(W);
     this.paint.height = Math.round(H);
     this.paintCtx = this.paint.getContext("2d")!;
-    this.clearPaint();
+    if (oldPW > 0 && oldPH > 0 && (oldPW !== this.paint.width || oldPH !== this.paint.height)) {
+      try {
+        this.paintCtx.drawImage(oldPaint, 0, 0, oldPW, oldPH, 0, 0, this.paint.width, this.paint.height);
+      } catch {
+        /* terrain redessiné : la partie reste jouable */
+      }
+    }
     this.bakeFloor();
   }
   private paintCtx!: CanvasRenderingContext2D;
@@ -893,7 +1023,6 @@ export class PaintballGame {
   }
 
   private clearPaint() {
-    this.paintLoadId++;
     const g = this.paintCtx;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, this.W, this.H);
@@ -901,7 +1030,7 @@ export class PaintballGame {
 
   private buildSprites() {
     const S = 88;
-    for (const c of [...PAINTS, "#ffffff", COL.chalk, "#7ef4ff"]) {
+    for (const c of [...PAINTS, "#ffffff", COL.chalk]) {
       for (let v = 0; v < 4; v++) {
         const cv = document.createElement("canvas");
         cv.width = S;
@@ -1043,36 +1172,15 @@ export class PaintballGame {
     this.bullets.length = 0;
     this.parts.length = 0;
     this.pickups.length = 0;
+    this.rollers.length = 0;
     this.telegraphs.length = 0;
     this.banners.length = 0;
     this.pending.length = 0;
     this.clearPaint();
-    Object.assign(this.p, {
-      x: this.W / 2,
-      y: this.H * 0.72,
-      vx: 0,
-      vy: 0,
-      hp: 6,
-      maxHp: 6,
-      invuln: 1.1,
-      ammo: 12,
-      mag: 12,
-      reload: 0,
-      fireT: 0,
-      bloom: 0,
-      dashT: 0,
-      dashCd: 0,
-      tripleT: 0,
-      rapidT: 0,
-      shield: 0,
-      shieldT: 0,
-      ricochetT: 0,
-      explosive: 0,
-      rollerT: 0,
-      rollerTick: 0,
-      hitFlash: 0,
-      angle: -Math.PI / 2,
-    });
+    this.p = this.makePilot(0);
+    this.p2 = this.duo ? this.makePilot(1) : null;
+    this.killsBy = [0, 0];
+    this.hitsBy = [0, 0];
     this.score = 0;
     this.wave = 0;
     this.kills = 0;
@@ -1089,167 +1197,14 @@ export class PaintballGame {
     this.flashAmt = 0;
   }
 
-  /* ---------------- sauvegarde en cours de partie ---------------- */
-
-  get canSave() {
-    return (this.status === "playing" || this.status === "paused") && this.wave > 0 && this.dying <= 0 && this.p.hp > 0;
-  }
-
-  saveSnapshot(): SavedRun | null {
-    if (!this.canSave) return null;
-    let paint = "";
-    try {
-      const c = document.createElement("canvas");
-      const scale = 0.5;
-      c.width = Math.max(1, Math.round(this.W * scale));
-      c.height = Math.max(1, Math.round(this.H * scale));
-      const g = c.getContext("2d")!;
-      g.drawImage(this.paint, 0, 0, c.width, c.height);
-      paint = c.toDataURL("image/webp", 0.72);
-      if (!paint.startsWith("data:image/webp")) paint = c.toDataURL("image/png");
-    } catch {
-      paint = "";
-    }
-    return {
-      v: 1,
-      mode: "solo",
-      savedAt: Date.now(),
-      label: `Vague ${this.wave} · ${Math.floor(this.score).toLocaleString("fr-FR")} pts`,
-      world: { w: this.W, h: this.H },
-      player: { ...this.p },
-      score: this.score,
-      wave: this.wave,
-      kills: this.kills,
-      shots: this.shots,
-      hits: this.hits,
-      streak: this.streak,
-      comboT: this.comboT,
-      maxCombo: this.maxCombo,
-      time: this.time,
-      spawnT: this.spawnT,
-      between: this.between,
-      maxAlive: this.maxAlive,
-      enemies: this.enemies.map((e) => ({ ...e })),
-      pickups: this.pickups.map((q) => ({ ...q })),
-      telegraphs: this.telegraphs.map((t) => ({ ...t })),
-      pending: [...this.pending],
-      gw: this.gw,
-      gh: this.gh,
-      covered: Array.from(this.covered),
-      coveredCount: this.coveredCount,
-      paint,
-    };
-  }
-
-  confirmSaved() {
-    this.sfx.pickup();
-    this.banner("SAUVEGARDÉ", "VAGUE " + this.wave + " · À PLUS TARD", COL.lime, 1.5);
-    this.flash(COL.lime, 0.16);
-  }
-
-  loadSaved(saved: SavedRun): boolean {
-    if (!saved || saved.v !== 1 || saved.mode !== "solo" || !saved.world || !saved.player) return false;
+  start(duo = false) {
     this.sfx.unlock();
-    this.resetRun();
-    const sx = this.W / Math.max(1, saved.world.w);
-    const sy = this.H / Math.max(1, saved.world.h);
-
-    this.score = saved.score || 0;
-    this.wave = Math.max(1, saved.wave || 1);
-    this.kills = saved.kills || 0;
-    this.shots = saved.shots || 0;
-    this.hits = saved.hits || 0;
-    this.streak = saved.streak || 0;
-    this.comboT = saved.comboT || 0;
-    this.maxCombo = saved.maxCombo || 0;
-    this.time = saved.time || 0;
-    this.spawnT = Math.max(0.25, saved.spawnT || 0.5);
-    this.between = Math.max(0, saved.between || 0);
-    this.maxAlive = saved.maxAlive || 8;
-    this.dying = 0;
-    this.hitstop = 0;
-    this.trauma = 0;
-    this.flashAmt = 0;
-    this.tutorialT = 0;
-
-    Object.assign(this.p, saved.player);
-    this.p.x *= sx;
-    this.p.y *= sy;
-    this.p.vx = 0;
-    this.p.vy = 0;
-    this.p.fireT = 0;
-    this.p.dashT = 0;
-    this.p.bloom = 0;
-    this.p.hitFlash = 0;
-    this.p.invuln = Math.max(1.5, this.p.invuln || 0);
-    this.collideRect(this.p, this.p.r);
-
-    this.enemies = (saved.enemies || []).map((e) => ({
-      ...e,
-      x: e.x * sx,
-      y: e.y * sy,
-      vx: 0,
-      vy: 0,
-      flash: 0,
-      born: Math.max(0.25, e.born || 0),
-    }));
-    for (const e of this.enemies) this.collideRect(e, e.r);
-    this.pickups = (saved.pickups || []).map((q) => ({ ...q, x: q.x * sx, y: q.y * sy, vx: 0, vy: 0 }));
-    this.telegraphs = (saved.telegraphs || []).map((t) => ({ ...t, x: t.x * sx, y: t.y * sy }));
-    this.pending = [...(saved.pending || [])];
-    this.bullets.length = 0;
-    this.parts.length = 0;
-    if (!this.enemies.length && !this.pending.length && !this.telegraphs.length && this.between <= 0) this.between = 1.2;
-
-    // couverture : on ré-échantillonne si la grille a changé (autre écran / orientation)
-    this.covered.fill(0);
-    this.coveredCount = 0;
-    const src = saved.covered || [];
-    if (saved.gw === this.gw && saved.gh === this.gh && src.length === this.covered.length) {
-      for (let i = 0; i < src.length; i++) {
-        if (src[i]) {
-          this.covered[i] = 1;
-          this.coveredCount++;
-        }
-      }
-    } else {
-      const gw = Math.max(1, saved.gw || 1);
-      const gh = Math.max(1, saved.gh || 1);
-      for (let y = 0; y < gh; y++) {
-        for (let x = 0; x < gw; x++) {
-          if (!src[y * gw + x]) continue;
-          this.mark(((x + 0.5) / gw) * this.W, ((y + 0.5) / gh) * this.H);
-        }
-      }
-    }
-
-    this.clearPaint();
-    const loadId = this.paintLoadId;
-    if (saved.paint) {
-      const img = new Image();
-      img.onload = () => {
-        if (this.dead || loadId !== this.paintLoadId) return;
-        this.paintCtx.clearRect(0, 0, this.W, this.H);
-        this.paintCtx.drawImage(img, 0, 0, this.W, this.H);
-      };
-      img.src = saved.paint;
-    }
-
-    this.last = 0;
-    this.setStatus("playing");
-    this.banner("PARTIE REPRISE", "VAGUE " + this.wave + " · ON CONTINUE", COL.player, 1.5);
-    this.sfx.wave();
-    this.addTrauma(0.22);
-    this.emitHud();
-    return true;
-  }
-
-  start() {
-    this.sfx.unlock();
+    this.duo = duo;
     this.resetRun();
     this.setStatus("playing");
     this.startWave(1);
     this.tutorialT = this.isTouch ? 7.5 : 0;
+    if (this.duo) this.banner("DUO", "P1 WASD · P2 FLÈCHES", COL.lime, 2);
     this.banner("GO!", "SPRAY 'EM ALL", COL.player, 1.1);
     this.sfx.wave();
     this.addTrauma(0.3);
@@ -1395,46 +1350,48 @@ export class PaintballGame {
 
   /* ---------------- shooting ---------------- */
 
-  private startReload() {
-    if (this.p.reload > 0 || this.p.ammo >= this.p.mag) return;
-    this.p.reload = 0.95;
-    this.p.reloadFrom = this.p.ammo;
+  private startReload(pl: Pilot) {
+    if (pl.dead || pl.reload > 0 || pl.ammo >= pl.mag) return;
+    if (pl.i === this.localIdx) this.queued.reload = true;
+    pl.reload = 0.95;
+    pl.reloadFrom = pl.ammo;
     this.sfx.reloadOut();
   }
 
-  private tryDash() {
-    if (this.status !== "playing" || this.dying > 0) return;
-    if (this.p.dashCd > 0 || this.p.dashT > 0) return;
-    let dx = this.axisX();
-    let dy = this.axisY();
+  private tryDash(pl: Pilot) {
+    if (this.status !== "playing" || this.dying > 0 || pl.dead) return;
+    if (pl.i === this.localIdx) this.queued.dash = true;
+    if (pl.dashCd > 0 || pl.dashT > 0) return;
+    let dx = this.axisX(pl.i);
+    let dy = this.axisY(pl.i);
     if (dx === 0 && dy === 0) {
-      dx = Math.cos(this.p.angle);
-      dy = Math.sin(this.p.angle);
+      dx = Math.cos(pl.angle);
+      dy = Math.sin(pl.angle);
     }
     const l = Math.hypot(dx, dy) || 1;
-    this.p.dashX = dx / l;
-    this.p.dashY = dy / l;
-    this.p.dashT = 0.17;
-    this.p.dashCd = 1.05;
-    this.p.invuln = Math.max(this.p.invuln, 0.34);
+    pl.dashX = dx / l;
+    pl.dashY = dy / l;
+    pl.dashT = 0.17;
+    pl.dashCd = 1.05;
+    pl.invuln = Math.max(pl.invuln, 0.34);
     this.addTrauma(0.24);
     this.sfx.dash();
     this.buzz(14);
-    this.ring(this.p.x, this.p.y, COL.player, 46, 0.28);
+    this.ring(pl.x, pl.y, pl.i === 0 ? COL.player : COL.lime, 46, 0.28);
   }
 
-  private fire() {
-    const p = this.p;
-    if (p.reload > 0 || p.fireT > 0 || p.dashT > 0) return;
+  private fire(pl: Pilot) {
+    const p = pl;
+    const col = p.i === 0 ? COL.player : COL.lime;
+    if (p.dead || p.reload > 0 || p.fireT > 0 || p.dashT > 0) return;
     if (p.ammo <= 0) {
-      this.startReload();
+      this.startReload(p);
       return;
     }
     p.ammo--;
     p.fireT = p.rapidT > 0 ? 0.062 : 0.108;
     p.bloom = Math.min(0.15, p.bloom + 0.035);
     const n = p.tripleT > 0 ? 3 : 1;
-    const explosiveShot = p.explosive > 0;
     for (let i = 0; i < n; i++) {
       const off = n === 1 ? 0 : (i - 1) * 0.13;
       const a = p.angle + off + rnd(-p.bloom, p.bloom);
@@ -1445,24 +1402,31 @@ export class PaintballGame {
         vx: Math.cos(a) * spd + p.vx * 0.22,
         vy: Math.sin(a) * spd + p.vy * 0.22,
         life: 1.25,
-        r: explosiveShot && i === 0 ? 7 : 5,
+        r: 5,
         dmg: 30,
-        color: explosiveShot && i === 0 ? COL.rusher : COL.player,
+        color: col,
         foe: false,
-        bounces: p.ricochetT > 0 ? 1 : 0,
-        explosive: explosiveShot && i === 0,
+        owner: p.i,
+        bounce: p.ricochetT > 0 ? 3 : 0,
+        boom: p.boomT > 0,
       });
     }
     this.shots += n;
-    if (explosiveShot) p.explosive = Math.max(0, p.explosive - 1);
-    // recoil + muzzle fx
     p.vx -= Math.cos(p.angle) * 42;
     p.vy -= Math.sin(p.angle) * 42;
-    this.spray(p.x + Math.cos(p.angle) * 22, p.y + Math.sin(p.angle) * 22, COL.player, 4, 130, 0.9, p.angle);
-    this.part({ kind: 2, x: p.x + Math.cos(p.angle) * 24, y: p.y + Math.sin(p.angle) * 24, life: 0.22, max: 0.22, size: 14, color: "#ffffff" });
+    this.spray(p.x + Math.cos(p.angle) * 22, p.y + Math.sin(p.angle) * 22, col, 4, 130, 0.9, p.angle);
+    this.part({
+      kind: 2,
+      x: p.x + Math.cos(p.angle) * 24,
+      y: p.y + Math.sin(p.angle) * 24,
+      life: 0.22,
+      max: 0.22,
+      size: 14,
+      color: "#ffffff",
+    });
     this.addTrauma(0.075);
     this.sfx.shoot();
-    if (p.ammo === 0) this.startReload();
+    if (p.ammo === 0) this.startReload(p);
   }
 
   private enemyShoot(e: Enemy, spread: number, count: number, speed: number, dmg: number) {
@@ -1478,6 +1442,9 @@ export class PaintballGame {
         dmg,
         color: ENEMY_DEF[e.type].color,
         foe: true,
+        owner: -1,
+        bounce: 0,
+        boom: false,
       });
     }
     this.spray(e.x + Math.cos(e.angle) * (e.r + 8), e.y + Math.sin(e.angle) * (e.r + 8), ENEMY_DEF[e.type].color, 3, 110, 0.8, e.angle);
@@ -1549,21 +1516,47 @@ export class PaintballGame {
 
   /* ---------------- update ---------------- */
 
-  private axisX() {
+  private axisX(idx = 0) {
     let a = 0;
-    if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) a += 1;
-    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) a -= 1;
+    if (idx === 1) {
+      if (this.keys.has("ArrowRight")) a += 1;
+      if (this.keys.has("ArrowLeft")) a -= 1;
+      return clamp(a, -1, 1);
+    }
+    if (this.keys.has("KeyD")) a += 1;
+    if (this.keys.has("KeyA")) a -= 1;
+    if (!this.duo) {
+      if (this.keys.has("ArrowRight")) a += 1;
+      if (this.keys.has("ArrowLeft")) a -= 1;
+    }
     if (this.stickMove.active) a += this.stickMove.dx;
     return clamp(a, -1, 1);
   }
-  private axisY() {
+  private axisY(idx = 0) {
     let a = 0;
-    if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) a += 1;
-    if (this.keys.has("KeyW") || this.keys.has("ArrowUp")) a -= 1;
+    if (idx === 1) {
+      if (this.keys.has("ArrowDown")) a += 1;
+      if (this.keys.has("ArrowUp")) a -= 1;
+      return clamp(a, -1, 1);
+    }
+    if (this.keys.has("KeyS")) a += 1;
+    if (this.keys.has("KeyW")) a -= 1;
+    if (!this.duo) {
+      if (this.keys.has("ArrowDown")) a += 1;
+      if (this.keys.has("ArrowUp")) a -= 1;
+    }
     if (this.stickMove.active) a += this.stickMove.dy;
     return clamp(a, -1, 1);
   }
-  private firing() {
+  private firing(idx = 0) {
+    if (idx === 1) {
+      return (
+        this.keys.has("Enter") ||
+        this.keys.has("NumpadEnter") ||
+        this.keys.has("Numpad0") ||
+        this.keys.has("Slash")
+      );
+    }
     return (
       this.mouse.down ||
       this.keys.has("Space") ||
@@ -1571,6 +1564,23 @@ export class PaintballGame {
       this.btn.fire.id !== -1 ||
       (this.stickAim.active && this.stickAim.mag > 0.4)
     );
+  }
+
+  /** visée assistée (pouce / pilote 2) : la menace la plus proche gagne */
+  private autoAim(p: Pilot, fallback: number | null) {
+    const t = this.nearestPilot === null ? null : null;
+    void t;
+    let best: Enemy | null = null;
+    let bd = 1e9;
+    for (const e of this.enemies) {
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d < bd) {
+        bd = d;
+        best = e;
+      }
+    }
+    if (best && bd < 660) return Math.atan2(best.y - p.y, best.x - p.x);
+    return fallback ?? p.angle;
   }
 
   /** retour haptique (sans-op si non supporté / coupé) */
@@ -1615,6 +1625,8 @@ export class PaintballGame {
       bb.press = Math.max(0, bb.press - dt);
     }
     this.tutorialT = Math.max(0, this.tutorialT - dt);
+    this.frameCount++;
+    if (this.frameCount % 8 === 0) this.checkSize();
     const sh = this.trauma * this.trauma * 20;
     this.shakeX = Math.cos(now * 47.3) * sh;
     this.shakeY = Math.sin(now * 38.9) * sh;
@@ -1628,14 +1640,6 @@ export class PaintballGame {
 
   private emitHud() {
     const combo = this.comboMult();
-    const p = this.p;
-    const powers: PowerChip[] = [];
-    if (p.rapidT > 0) powers.push({ id: "rapid", name: "OVERCLOCK", pct: p.rapidT / 5, color: COL.player });
-    if (p.tripleT > 0) powers.push({ id: "triple", name: "TRIPLE JET", pct: p.tripleT / 9, color: COL.boss });
-    if (p.shield > 0) powers.push({ id: "shield", name: "BOUCLIER", pct: p.shieldT / 10, color: "#7ef4ff", charges: p.shield });
-    if (p.ricochetT > 0) powers.push({ id: "ricochet", name: "RICOCHET", pct: p.ricochetT / 8, color: COL.sniper });
-    if (p.explosive > 0) powers.push({ id: "explosive", name: "EXPLOSIF", pct: 1, color: COL.rusher, charges: p.explosive });
-    if (p.rollerT > 0) powers.push({ id: "roller", name: "ROULEAU", pct: p.rollerT / 6, color: COL.lime });
     this.cb.onHud({
       hp: Math.max(0, this.p.hp),
       maxHp: this.p.maxHp,
@@ -1649,9 +1653,20 @@ export class PaintballGame {
       mag: this.p.mag,
       time: this.time,
       dashPct: 1 - clamp(this.p.dashCd / 1.05, 0, 1),
-      powerName: powers[0]?.name ?? "",
-      powerPct: powers[0]?.pct ?? 0,
-      powers,
+      powerName: this.p.tripleT > 0 ? "TRIPLE STREAM" : this.p.rapidT > 0 ? "OVERCLOCK" : "",
+      powerPct: Math.max(this.p.tripleT / 9, this.p.rapidT / 5),
+      duo: this.duo,
+      shield: this.p.shield,
+      p2: this.p2
+        ? {
+            shield: this.p2.shield,
+            hp: Math.max(0, this.p2.hp),
+            maxHp: this.p2.maxHp,
+            ammo: this.p2.ammo,
+            mag: this.p2.mag,
+            dead: this.p2.dead,
+          }
+        : null,
     });
   }
 
@@ -1664,7 +1679,7 @@ export class PaintballGame {
   private update(dt: number, demo: boolean) {
     this.time += dt;
     if (!demo) {
-      this.updatePlayer(dt);
+      for (const pl of this.pilots()) this.updatePilot(pl, dt);
       this.updateWaves(dt);
       this.updatePickups(dt);
       this.comboT = Math.max(0, this.comboT - dt);
@@ -1677,6 +1692,7 @@ export class PaintballGame {
     }
     this.updateEnemies(dt, demo);
     this.updateBullets(dt);
+    this.updateRollers(dt);
     this.updateParticles(dt);
     for (let i = this.telegraphs.length - 1; i >= 0; i--) {
       const t = this.telegraphs[i];
@@ -1721,9 +1737,21 @@ export class PaintballGame {
       const cov = this.coverage;
       const bonus = 220 * this.wave + Math.round(cov * 1400);
       this.score += bonus;
-      this.p.hp = Math.min(this.p.maxHp, this.p.hp + 1);
-      this.p.ammo = this.p.mag;
-      this.p.reload = 0;
+      for (const pl of this.pilots()) {
+        if (pl.dead) {
+          pl.dead = false;
+          pl.hp = 3;
+          pl.invuln = 2.4;
+          pl.x = this.W / 2;
+          pl.y = this.H * 0.72;
+          this.ring(pl.x, pl.y, pl.i === 0 ? COL.player : COL.lime, 90, 0.5);
+          this.popText(pl.x, pl.y - 30, "PILOTE " + (pl.i + 1) + " REVIVE!", COL.lime, 22);
+        } else {
+          pl.hp = Math.min(pl.maxHp, pl.hp + 1);
+        }
+        pl.ammo = pl.mag;
+        pl.reload = 0;
+      }
       this.banner("WAVE " + this.wave + " CLEAR", "+" + bonus + "  •  COURT " + Math.round(cov * 100) + "%", COL.boss, 1.9);
       this.sfx.wave();
       this.flash(COL.boss, 0.22);
@@ -1731,8 +1759,14 @@ export class PaintballGame {
     }
   }
 
-  private updatePlayer(dt: number) {
-    const p = this.p;
+  private updatePilot(pl: Pilot, dt: number) {
+    const p = pl;
+    const col = p.i === 0 ? COL.player : COL.lime;
+    const net = this.netPilot && this.netPilot.idx === pl.i ? this.netPilot : null;
+    if (net && net.input === null) return; // pilotade à distance : piloté par snapshots
+    const rem = net ? net.input : null;
+    const c = pl.i === this.localIdx ? 0 : 1;
+    if (p.dead) return;
     if (this.dying > 0) {
       p.vx *= 1 - 3 * dt;
       p.vy *= 1 - 3 * dt;
@@ -1740,15 +1774,18 @@ export class PaintballGame {
       p.y += p.vy * dt;
       return;
     }
-    const ax = this.axisX();
-    const ay = this.axisY();
+    const ax = rem ? rem.mx : this.axisX(c);
+    const ay = rem ? rem.my : this.axisY(c);
     const mag = Math.hypot(ax, ay);
 
-    // aim
-    if (this.stickAim.active && this.stickAim.mag > 0.12) {
+    // --- visée
+    if (rem) {
+      p.angle = rem.aim;
+    } else if (c === 0 && this.stickAim.active && this.stickAim.mag > 0.12) {
       let want = Math.atan2(this.stickAim.dy, this.stickAim.dx);
       if (this.isTouch) {
-        // assistance de visée : un pouce n'a pas la précision d'une souris
+        const t = this.nearestPilot(p.x, p.y);
+        void t;
         let best: Enemy | null = null;
         let bd = 1e9;
         for (const e of this.enemies) {
@@ -1767,31 +1804,32 @@ export class PaintballGame {
         }
       }
       p.angle = want;
-    } else if (this.mouse.used) {
+    } else if (c === 0 && this.mouse.used && !this.duo) {
+      p.angle = Math.atan2(this.mouse.y - p.y, this.mouse.x - p.x);
+    } else if (c === 0 && this.mouse.used && this.duo && this.mouse.down) {
       p.angle = Math.atan2(this.mouse.y - p.y, this.mouse.x - p.x);
     } else {
-      // touch / keyboard-only: soft auto-aim at the nearest threat
-      let best = -1;
-      let bd = 1e9;
-      for (let i = 0; i < this.enemies.length; i++) {
-        const e = this.enemies[i];
-        const d = Math.hypot(e.x - p.x, e.y - p.y);
-        if (d < bd) {
-          bd = d;
-          best = i;
-        }
-      }
-      if (best >= 0 && bd < 640) p.angle = Math.atan2(this.enemies[best].y - p.y, this.enemies[best].x - p.x);
-      else if (mag > 0.15) p.angle = Math.atan2(ay, ax);
+      p.angle = this.autoAim(p, mag > 0.15 ? Math.atan2(ay, ax) : null);
     }
 
-    // dash / move
+    // --- dash / déplacement
     if (p.dashT > 0) {
       p.dashT -= dt;
       p.vx = p.dashX * 640;
       p.vy = p.dashY * 640;
       if (Math.random() < 0.9)
-        this.part({ kind: 0, x: p.x + rnd(-6, 6), y: p.y + rnd(-6, 6), vx: -p.vx * 0.08, vy: -p.vy * 0.08, life: 0.3, max: 0.3, size: rnd(3, 7), color: COL.player, paint: 1 });
+        this.part({
+          kind: 0,
+          x: p.x + rnd(-6, 6),
+          y: p.y + rnd(-6, 6),
+          vx: -p.vx * 0.08,
+          vy: -p.vy * 0.08,
+          life: 0.3,
+          max: 0.3,
+          size: rnd(3, 7),
+          color: col,
+          paint: 1,
+        });
     } else {
       const spd = 252 * (p.reload > 0 ? 0.86 : 1);
       const tx = mag > 0.02 ? (ax / Math.max(mag, 1)) * spd : 0;
@@ -1806,10 +1844,20 @@ export class PaintballGame {
     p.step += Math.hypot(p.vx, p.vy) * dt * 0.055;
     this.collideRect(p, p.r);
     if (mag > 0.4 && p.dashT <= 0 && Math.random() < dt * 12) {
-      this.part({ kind: 0, x: p.x - Math.cos(p.angle) * 8, y: p.y + 8, vx: rnd(-16, 16), vy: rnd(-8, 16), life: 0.2, max: 0.2, size: rnd(1.5, 3), color: COL.player });
+      this.part({
+        kind: 0,
+        x: p.x - Math.cos(p.angle) * 8,
+        y: p.y + 8,
+        vx: rnd(-16, 16),
+        vy: rnd(-8, 16),
+        life: 0.2,
+        max: 0.2,
+        size: rnd(1.5, 3),
+        color: col,
+      });
     }
 
-    // weapon
+    // --- arme
     p.fireT -= dt;
     if (p.reload > 0) {
       p.reload -= dt;
@@ -1819,42 +1867,40 @@ export class PaintballGame {
         p.reload = 0;
         p.ammo = p.mag;
         this.sfx.reloadIn();
-        this.ring(p.x, p.y, COL.player, 34, 0.22);
+        this.ring(p.x, p.y, col, 34, 0.22);
       }
     }
     p.bloom = Math.max(0, p.bloom - dt * 0.28);
-    if (this.firing()) this.fire();
+    if (rem ? rem.fire : this.firing(c)) this.fire(p);
+    if (rem && rem.dash) {
+      rem.dash = false;
+      this.tryDash(pl);
+    }
+    if (rem && rem.reload) {
+      rem.reload = false;
+      this.startReload(pl);
+    }
     p.invuln = Math.max(0, p.invuln - dt);
     p.hitFlash = Math.max(0, p.hitFlash - dt * 3.4);
     p.tripleT = Math.max(0, p.tripleT - dt);
     p.rapidT = Math.max(0, p.rapidT - dt);
     p.ricochetT = Math.max(0, p.ricochetT - dt);
-    p.rollerT = Math.max(0, p.rollerT - dt);
-    p.shieldT = Math.max(0, p.shieldT - dt);
-    if (p.shieldT <= 0) p.shield = 0;
-    if (p.rollerT > 0 && Math.hypot(p.vx, p.vy) > 60) {
-      p.rollerTick -= dt;
-      if (p.rollerTick <= 0) {
-        p.rollerTick = 0.05;
-        this.splat(p.x - p.vx * 0.03, p.y - p.vy * 0.03, COL.lime, 42, 0.75);
-      }
-    }
+    p.boomT = Math.max(0, p.boomT - dt);
   }
 
-  private hurtPlayer(amount: number, x: number, y: number, color: string) {
-    const p = this.p;
-    if (p.invuln > 0 || this.dying > 0 || this.status !== "playing") return;
+  private hurtPilot(p: Pilot, amount: number, x: number, y: number, color: string) {
+    if (p.dead || p.invuln > 0 || this.dying > 0 || this.status !== "playing") return;
     if (p.shield > 0) {
       p.shield--;
-      p.invuln = 0.55;
-      p.hitFlash = 0.5;
-      if (p.shield <= 0) p.shieldT = 0;
-      this.ring(p.x, p.y, "#7ef4ff", 64, 0.3);
+      p.invuln = 0.5;
+      p.hitFlash = 1;
+      this.ring(p.x, p.y, "#7ef4ff", 78, 0.32);
       this.spray(p.x, p.y, "#7ef4ff", 12, 220);
-      this.popText(p.x, p.y - 28, p.shield > 0 ? "BOUCLIER" : "BOUCLIER BRISÉ", "#7ef4ff", 18);
-      this.addTrauma(0.25);
-      this.sfx.hit();
-      this.buzz(12);
+      this.popText(p.x, p.y - 26, "BOUCLIER !", "#7ef4ff", 19);
+      this.addTrauma(0.26);
+      this.flash("#7ef4ff", 0.2);
+      this.sfx.shield();
+      this.buzz(16);
       return;
     }
     p.hp -= amount;
@@ -1873,26 +1919,46 @@ export class PaintballGame {
     this.sfx.hurt();
     this.buzz([0, 30, 24, 46]);
     this.popText(p.x, p.y - 26, "SPLAT!", color, 22);
-    if (p.hp <= 0) {
-      p.hp = 0;
-      this.dying = 0.85;
-      this.addTrauma(1);
-      this.flash("#ffffff", 0.9);
-      this.spray(p.x, p.y, color, 46, 420);
-      this.splat(p.x, p.y, color, 150, 1);
-      this.splat(p.x + rnd(-40, 40), p.y + rnd(-40, 40), color, 90, 0.9);
-      this.ring(p.x, p.y, "#ffffff", 150, 0.5);
-      this.sfx.over();
-      this.buzz([0, 90, 50, 180]);
-      for (let i = 0; i < 10; i++)
-        this.part({ kind: 1, x: p.x, y: p.y, vx: rnd(-320, 320), vy: rnd(-320, 320), life: rnd(0.3, 0.7), max: 0.7, size: rnd(2, 5), color: COL.player });
+    if (p.hp > 0) return;
+    p.hp = 0;
+    p.dead = true;
+    this.spray(p.x, p.y, color, 46, 420);
+    this.splat(p.x, p.y, color, 150, 1);
+    this.splat(p.x + rnd(-40, 40), p.y + rnd(-40, 40), color, 90, 0.9);
+    this.ring(p.x, p.y, "#ffffff", 150, 0.5);
+    for (let i = 0; i < 10; i++)
+      this.part({
+        kind: 1,
+        x: p.x,
+        y: p.y,
+        vx: rnd(-320, 320),
+        vy: rnd(-320, 320),
+        life: rnd(0.3, 0.7),
+        max: 0.7,
+        size: rnd(2, 5),
+        color: p.i === 0 ? COL.player : COL.lime,
+      });
+    this.addTrauma(0.9);
+    if (this.duo && !this.allDown()) {
+      // en duo, un pilote tombe mais la partie continue : revive en fin de vague
+      this.banner("PILOTE " + (p.i + 1) + " HORS JEU", "REVIVE À LA PROCHAINE VAGUE", COL.rusher, 1.8);
+      this.flash(color, 0.6);
+      this.buzz([0, 40, 30, 60]);
+      return;
     }
+    this.dying = 0.85;
+    this.addTrauma(1);
+    this.flash("#ffffff", 0.9);
+    this.sfx.over();
+    this.buzz([0, 90, 50, 180]);
   }
 
   private updateEnemies(dt: number, demo: boolean) {
-    const target = demo ? this.ghost : this.p;
+    const ghost = this.ghost;
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
+      const tp = demo ? null : this.nearestPilot(e.x, e.y);
+      const target = tp ? tp.p : ghost;
       e.born = Math.max(0, e.born - dt);
       e.flash = Math.max(0, e.flash - dt * 4);
       e.wobble += dt * (e.type === "rusher" ? 16 : 7);
@@ -1929,9 +1995,9 @@ export class PaintballGame {
           tvy *= 2.1;
         }
       }
-      if (!demo && e.type === "rusher" && d < e.r + this.p.r + 6 && e.coolT <= 0) {
+      if (tp && e.type === "rusher" && d < e.r + tp.p.r + 6 && e.coolT <= 0) {
         e.coolT = 1.1;
-        this.hurtPlayer(1, e.x, e.y, COL.rusher);
+        this.hurtPilot(tp.p, 1, e.x, e.y, COL.rusher);
         tvx = -ax * 220;
         tvy = -ay * 220;
       }
@@ -2007,30 +2073,6 @@ export class PaintballGame {
     }
   }
 
-  private explodePaint(x: number, y: number, color: string) {
-    const R = 95;
-    this.splat(x, y, color, 150, 0.95);
-    this.splat(x + rnd(-30, 30), y + rnd(-30, 30), COL.rusher, 80, 0.8);
-    this.spray(x, y, color, 34, 380);
-    this.ring(x, y, COL.rusher, 130, 0.4);
-    this.addTrauma(0.5);
-    this.hitstop = Math.max(this.hitstop, 0.04);
-    this.flash(COL.rusher, 0.18);
-    this.sfx.splat();
-    for (let j = this.enemies.length - 1; j >= 0; j--) {
-      const e = this.enemies[j];
-      const d = Math.hypot(e.x - x, e.y - y);
-      if (d > R + e.r) continue;
-      e.hp -= 60;
-      e.flash = 1;
-      const a = Math.atan2(e.y - y, e.x - x);
-      e.vx += Math.cos(a) * 220;
-      e.vy += Math.sin(a) * 220;
-      this.splat(e.x, e.y, color, 40, 0.8);
-      if (e.hp <= 0) this.killEnemy(e, j, color);
-    }
-  }
-
   private updateBullets(dt: number) {
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
@@ -2041,60 +2083,57 @@ export class PaintballGame {
         b.x += (b.vx * dt) / steps;
         b.y += (b.vy * dt) / steps;
         if (b.x < 4 || b.y < 4 || b.x > this.W - 4 || b.y > this.H - 4) {
-          if (b.explosive) {
-            this.explodePaint(clamp(b.x, 8, this.W - 8), clamp(b.y, 8, this.H - 8), b.color);
-            b.explosive = false;
-          }
-          gone = true;
-          break;
-        }
-        for (const bl of this.bunkers) {
-          if (!this.hitsRect(b.x, b.y, bl)) continue;
-          if (b.explosive) {
-            this.explodePaint(b.x, b.y, b.color);
-            b.explosive = false;
-            gone = true;
-          } else if ((b.bounces ?? 0) > 0) {
-            b.bounces = (b.bounces ?? 0) - 1;
-            const dx = b.x - bl.x;
-            const dy = b.y - bl.y;
-            const px = bl.w / 2 + b.r - Math.abs(dx);
-            const py = bl.h / 2 + b.r - Math.abs(dy);
-            if (px < py) {
-              const sign = dx >= 0 ? 1 : -1;
-              b.x = bl.x + sign * (bl.w / 2 + b.r + 1);
-              b.vx = Math.abs(b.vx) * sign;
-            } else {
-              const sign = dy >= 0 ? 1 : -1;
-              b.y = bl.y + sign * (bl.h / 2 + b.r + 1);
-              b.vy = Math.abs(b.vy) * sign;
-            }
-            this.spray(b.x, b.y, b.color, 4, 120);
+          if (b.bounce > 0 && !b.foe) {
+            b.bounce--;
+            if (b.x < 4 || b.x > this.W - 4) b.vx = -b.vx;
+            if (b.y < 4 || b.y > this.H - 4) b.vy = -b.vy;
+            b.x = clamp(b.x, 6, this.W - 6);
+            b.y = clamp(b.y, 6, this.H - 6);
+            this.spray(b.x, b.y, b.color, 5, 140, 1.6, Math.atan2(b.vy, b.vx));
+            this.sfx.ricochet();
           } else {
             gone = true;
-            this.spray(b.x, b.y, b.color, 5, 130, 1.4, Math.atan2(-b.vy, -b.vx));
+            break;
           }
-          break;
+        }
+        for (const bl of this.bunkers) {
+          if (this.hitsRect(b.x, b.y, bl)) {
+            if (b.bounce > 0 && !b.foe) {
+              b.bounce--;
+              const dx = Math.abs(b.x - bl.x) / (bl.w / 2);
+              const dy = Math.abs(b.y - bl.y) / (bl.h / 2);
+              if (dx > dy) b.vx = -b.vx;
+              else b.vy = -b.vy;
+              b.x += b.vx * 0.012;
+              b.y += b.vy * 0.012;
+              this.spray(b.x, b.y, b.color, 6, 160, 1.6, Math.atan2(b.vy, b.vx));
+              this.sfx.ricochet();
+            } else {
+              gone = true;
+              this.spray(b.x, b.y, b.color, 5, 130, 1.4, Math.atan2(-b.vy, -b.vx));
+            }
+            break;
+          }
         }
         if (gone) break;
         if (b.foe) {
           if (this.status === "playing" && this.dying <= 0) {
-            const dd = Math.hypot(b.x - this.p.x, b.y - this.p.y);
-            if (dd < this.p.r + b.r) {
-              this.hurtPlayer(1, b.x - b.vx * 0.01, b.y - b.vy * 0.01, b.color);
-              gone = true;
+            for (const pl of this.pilots()) {
+              if (pl.dead) continue;
+              const dd = Math.hypot(b.x - pl.x, b.y - pl.y);
+              if (dd < pl.r + b.r) {
+                this.hurtPilot(pl, 1, b.x - b.vx * 0.01, b.y - b.vy * 0.01, b.color);
+                gone = true;
+                break;
+              }
             }
           }
         } else {
           for (let j = this.enemies.length - 1; j >= 0; j--) {
             const e = this.enemies[j];
             if (Math.hypot(b.x - e.x, b.y - e.y) < e.r + b.r) {
-              if (b.explosive) {
-                this.explodePaint(b.x, b.y, b.color);
-                b.explosive = false;
-              } else {
-                this.damageEnemy(e, j, b.dmg, b.x, b.y, b.color);
-              }
+              if (b.boom && !b.foe) this.explode(b.x, b.y, b.color, b.owner, 118, b.dmg);
+              else this.damageEnemy(e, j, b.dmg, b.x, b.y, b.color, b.owner);
               gone = true;
               break;
             }
@@ -2102,11 +2141,8 @@ export class PaintballGame {
         }
       }
       if (gone || b.life <= 0) {
-        if (b.explosive) {
-          this.explodePaint(b.x, b.y, b.color);
-          b.explosive = false;
-        }
-        this.splat(b.x, b.y, b.color, b.foe ? 26 : 34, 0.8);
+        if (!gone) this.splat(b.x, b.y, b.color, b.foe ? 26 : 34, 0.8);
+        else this.splat(b.x, b.y, b.color, 30, 0.75);
         this.spray(b.x, b.y, b.color, 3, 90, 1.2, Math.atan2(-b.vy, -b.vx));
         this.bullets.splice(i, 1);
         if (this.bullets.length > 260) this.bullets.shift();
@@ -2114,8 +2150,24 @@ export class PaintballGame {
     }
   }
 
-  private damageEnemy(e: Enemy, idx: number, dmg: number, hx: number, hy: number, color: string) {
-    this.hits++;
+  /** Explosion de peinture : dégâts de zone + grand éclat. */
+  private explode(x: number, y: number, color: string, owner: number, radius: number, dmg: number) {
+    this.ring(x, y, color, radius * 1.7, 0.42);
+    this.splat(x, y, color, radius * 1.5, 1);
+    this.splat(x + rnd(-30, 30), y + rnd(-30, 30), color, radius * 0.8, 0.9);
+    this.spray(x, y, color, 26, 340);
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const e = this.enemies[i];
+      if (Math.hypot(e.x - x, e.y - y) < radius + e.r) this.damageEnemy(e, i, dmg, x, y, color, owner);
+    }
+    this.addTrauma(0.45);
+    this.hitstop = Math.max(this.hitstop, 0.045);
+    this.flash(color, 0.18);
+    this.sfx.boom();
+  }
+
+  private damageEnemy(e: Enemy, idx: number, dmg: number, hx: number, hy: number, color: string, owner = 0) {
+    if (owner >= 0) this.hitsBy[owner]++;
     e.hp -= dmg;
     e.flash = 1;
     const a = Math.atan2(e.y - hy, e.x - hx);
@@ -2125,14 +2177,15 @@ export class PaintballGame {
     this.spray(hx, hy, color, 6, 170, 1.5, a + Math.PI);
     this.sfx.hit();
     this.addTrauma(0.05);
-    if (e.hp <= 0) this.killEnemy(e, idx, color);
+    if (e.hp <= 0) this.killEnemy(e, idx, color, owner);
   }
 
-  private killEnemy(e: Enemy, idx: number, color: string) {
+  private killEnemy(e: Enemy, idx: number, color: string, owner = 0) {
     this.enemies.splice(idx, 1);
     const def = ENEMY_DEF[e.type];
     const prevMult = this.comboMult();
     this.kills++;
+    if (owner >= 0) this.killsBy[owner]++;
     this.streak++;
     this.maxCombo = Math.max(this.maxCombo, this.streak);
     this.comboT = 3.4;
@@ -2176,10 +2229,9 @@ export class PaintballGame {
     }
     // drops
     const roll = Math.random();
-    const chance = e.type === "boss" ? 1 : 0.28;
+    const chance = e.type === "boss" ? 1 : 0.24;
     if (roll < chance) {
-      const kinds = DROP_TABLE;
-      const kind = e.type === "boss" ? 1 : kinds[(Math.random() * kinds.length) | 0];
+      const kind = e.type === "boss" ? 3 + Math.floor(Math.random() * 4) : rollPickup();
       this.pickups.push({ x: e.x, y: e.y, vx: rnd(-40, 40), vy: rnd(-40, 40), t: 13, kind });
     }
   }
@@ -2203,34 +2255,109 @@ export class PaintballGame {
         this.pickups.splice(i, 1);
         continue;
       }
-      if (Math.hypot(q.x - this.p.x, q.y - this.p.y) < this.p.r + 18) {
+      const tp = this.nearestPilot(q.x, q.y);
+      if (tp && Math.hypot(q.x - tp.p.x, q.y - tp.p.y) < tp.p.r + 18) {
         this.pickups.splice(i, 1);
-        const info = BONUS[q.kind];
         this.sfx.pickup();
-        this.ring(q.x, q.y, info.color, 54, 0.3);
+        this.ring(q.x, q.y, (PICKUPS[q.kind] ?? PICKUPS[0]).color, 54, 0.3);
+        const def = PICKUPS[q.kind] ?? PICKUPS[0];
         if (q.kind === 1) {
-          this.p.hp = Math.min(this.p.maxHp, this.p.hp + 2);
+          tp.p.hp = Math.min(tp.p.maxHp, tp.p.hp + 2);
+          this.popText(q.x, q.y - 10, "+PAINT", def.color, 20);
         } else if (q.kind === 0) {
-          this.p.ammo = this.p.mag;
-          this.p.reload = 0;
-          this.p.rapidT = 5;
+          tp.p.ammo = tp.p.mag;
+          tp.p.reload = 0;
+          tp.p.rapidT = 5;
+          this.popText(q.x, q.y - 10, "OVERCLOCK", def.color, 20);
         } else if (q.kind === 2) {
-          this.p.tripleT = 9;
+          tp.p.tripleT = 9;
+          this.popText(q.x, q.y - 10, "TRIPLE STREAM", def.color, 20);
         } else if (q.kind === 3) {
-          this.p.shield = 2;
-          this.p.shieldT = 10;
+          tp.p.shield = 2;
+          tp.p.invuln = Math.max(tp.p.invuln, 0.6);
+          this.ring(tp.p.x, tp.p.y, def.color, 90, 0.42);
+          this.popText(q.x, q.y - 10, "BOUCLIER", def.color, 20);
         } else if (q.kind === 4) {
-          this.p.ricochetT = 8;
+          tp.p.ricochetT = 12;
+          this.popText(q.x, q.y - 10, "RICOCHET", def.color, 20);
         } else if (q.kind === 5) {
-          this.p.explosive = Math.min(2, this.p.explosive + 1);
-        } else if (q.kind === 6) {
-          this.p.rollerT = 6;
+          tp.p.boomT = 9;
+          this.popText(q.x, q.y - 10, "BILLE EXPLOSIVE", def.color, 20);
+        } else {
+          this.spawnRoller(tp.p);
+          this.popText(q.x, q.y - 10, "ROULEAU !", def.color, 22);
         }
-        this.popText(q.x, q.y - 10, info.short, info.color, 20);
         this.score += 60;
         this.flash("#ffffff", 0.14);
-        this.buzz(10);
       }
+    }
+  }
+
+  /** Rouleau de peinture : avance, peint large, écrase ce qu'il traverse. */
+  private spawnRoller(p: Pilot) {
+    this.rollers.push({
+      x: p.x + Math.cos(p.angle) * 30,
+      y: p.y + Math.sin(p.angle) * 30,
+      a: p.angle,
+      t: 0,
+      life: 2.4,
+      speed: 430,
+      w: 78,
+      hit: new Set<Enemy>(),
+    });
+    this.addTrauma(0.3);
+    this.sfx.boss();
+    this.buzz(28);
+  }
+
+  private updateRollers(dt: number) {
+    for (let i = this.rollers.length - 1; i >= 0; i--) {
+      const r = this.rollers[i];
+      r.t += dt;
+      r.x += Math.cos(r.a) * r.speed * dt;
+      r.y += Math.sin(r.a) * r.speed * dt;
+      this.splat(r.x + rnd(-r.w / 2, r.w / 2), r.y + rnd(-r.w / 2, r.w / 2), COL.grunt, 56, 0.7);
+      for (const e of this.enemies) {
+        if (r.hit.has(e)) continue;
+        if (Math.hypot(e.x - r.x, e.y - r.y) < r.w * 0.62 + e.r) {
+          r.hit.add(e);
+          this.damageEnemy(e, this.enemies.indexOf(e), 80, r.x, r.y, COL.grunt, 0);
+          this.spray(e.x, e.y, COL.grunt, 12, 260);
+        }
+      }
+      const out = r.x < -40 || r.y < -40 || r.x > this.W + 40 || r.y > this.H + 40;
+      // le rouleau passe PAR-DESSUS les bunkers : il ne s'arrete qu'aux murs
+      if (r.t > r.life || out) {
+        this.splat(r.x, r.y, COL.grunt, 120, 1);
+        this.ring(r.x, r.y, COL.grunt, 90, 0.35);
+        this.spray(r.x, r.y, COL.grunt, 16, 240);
+        this.rollers.splice(i, 1);
+      }
+    }
+  }
+
+  private drawRollers(ctx: CanvasRenderingContext2D) {
+    for (const r of this.rollers) {
+      const glow = this.glows.get(COL.grunt);
+      if (glow) {
+        ctx.globalAlpha = 0.35;
+        ctx.drawImage(glow, r.x - r.w * 1.2, r.y - r.w * 1.2, r.w * 2.4, r.w * 2.4);
+      }
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.rotate(r.a);
+      ctx.globalAlpha = 0.96;
+      ctx.fillStyle = "#132019";
+      this.rr(ctx, -r.w * 0.78, -r.w / 2, r.w * 1.56, r.w, 14);
+      ctx.fill();
+      ctx.fillStyle = COL.grunt;
+      this.rr(ctx, -r.w * 0.72, -r.w / 2 + 7, r.w * 1.44, r.w - 14, 11);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.22)";
+      this.rr(ctx, -r.w * 0.62, -r.w / 2 + 12, r.w * 1.24, 9, 5);
+      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -2298,16 +2425,20 @@ export class PaintballGame {
       ctx.ellipse(e.x + 4, e.y + 7, e.r * 1.05, e.r * 0.62, 0, 0, TAU);
       ctx.fill();
     }
-    if (this.status !== "menu" && this.dying >= 0) {
-      ctx.beginPath();
-      ctx.ellipse(this.p.x + 4, this.p.y + 8, this.p.r * 1.05, this.p.r * 0.6, 0, 0, TAU);
-      ctx.fill();
+    if (this.status !== "menu") {
+      for (const pl of this.pilots()) {
+        if (pl.dead) continue;
+        ctx.beginPath();
+        ctx.ellipse(pl.x + 4, pl.y + 8, pl.r * 1.05, pl.r * 0.6, 0, 0, TAU);
+        ctx.fill();
+      }
     }
 
     this.drawParticles(ctx, 0);
     for (const e of this.enemies) this.drawEnemy(ctx, e);
-    if (this.status !== "menu") this.drawPlayer(ctx);
+    if (this.status !== "menu") for (const pl of this.pilots()) this.drawPlayer(ctx, pl);
     this.drawBullets(ctx);
+    this.drawRollers(ctx);
     this.drawParticles(ctx, 1);
     this.drawReticle(ctx);
 
@@ -2436,13 +2567,13 @@ export class PaintballGame {
   }
 
   private drawPickup(ctx: CanvasRenderingContext2D, q: Pickup) {
-    const info = BONUS[q.kind];
-    const col = info.color;
+    const def = PICKUPS[q.kind] ?? PICKUPS[0];
+    const col = def.color;
     const bob = Math.sin(this.time * 5 + q.x) * 3;
     const glow = this.glows.get(col);
     ctx.save();
     ctx.translate(q.x, q.y + bob);
-    if (glow) {
+    if (glow && q.t > 2.5) {
       ctx.globalAlpha = 0.5;
       ctx.drawImage(glow, -34, -34, 68, 68);
       ctx.globalAlpha = 1;
@@ -2450,47 +2581,16 @@ export class PaintballGame {
     if (q.t < 3) ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(q.t * 9));
     ctx.rotate(Math.sin(this.time * 3 + q.y) * 0.12);
     ctx.fillStyle = "#0b1210";
-    this.rr(ctx, -14, -12, 28, 24, 5);
+    this.rr(ctx, -13, -11, 26, 22, 5);
     ctx.fill();
     ctx.fillStyle = col;
-    this.rr(ctx, -12, -10, 24, 20, 4);
+    this.rr(ctx, -11, -9, 22, 18, 4);
     ctx.fill();
-    ctx.strokeStyle = "#0b1210";
     ctx.fillStyle = "#0b1210";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    if (q.kind === 0) {
-      ctx.font = "800 13px Barlow, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(">>", 0, 1);
-    } else if (q.kind === 1) {
-      ctx.beginPath(); ctx.moveTo(-5, 0); ctx.lineTo(5, 0); ctx.moveTo(0, -5); ctx.lineTo(0, 5); ctx.stroke();
-    } else if (q.kind === 2) {
-      for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.arc(i * 5, 0, 2.2, 0, TAU); ctx.fill(); }
-    } else if (q.kind === 3) {
-      ctx.beginPath();
-      ctx.moveTo(0, -6); ctx.lineTo(6, -3); ctx.lineTo(6, 2); ctx.quadraticCurveTo(6, 6, 0, 8); ctx.quadraticCurveTo(-6, 6, -6, 2); ctx.lineTo(-6, -3); ctx.closePath();
-      ctx.stroke();
-    } else if (q.kind === 4) {
-      ctx.beginPath(); ctx.moveTo(-6, 5); ctx.lineTo(0, -4); ctx.lineTo(6, 5); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(3, -4); ctx.lineTo(6, -4); ctx.lineTo(6, -1); ctx.stroke();
-    } else if (q.kind === 5) {
-      ctx.beginPath(); ctx.arc(0, 2, 5, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(2, -3); ctx.quadraticCurveTo(5, -7, 7, -5); ctx.stroke();
-    } else {
-      ctx.fillRect(-7, -5, 10, 6);
-      ctx.beginPath(); ctx.moveTo(3, -2); ctx.lineTo(7, -2); ctx.lineTo(7, 5); ctx.stroke();
-    }
-    ctx.rotate(-Math.sin(this.time * 3 + q.y) * 0.12);
-    ctx.font = "800 9px 'Barlow Semi Condensed', Barlow, sans-serif";
+    ctx.font = "700 14px Barlow, sans-serif";
     ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(5,16,13,0.9)";
-    ctx.strokeText(info.short, 0, 15);
-    ctx.fillStyle = col;
-    ctx.fillText(info.short, 0, 15);
+    ctx.textBaseline = "middle";
+    ctx.fillText(def.label, 0, 1);
     ctx.restore();
     ctx.globalAlpha = 1;
   }
@@ -2526,8 +2626,9 @@ export class PaintballGame {
     ctx.globalAlpha = 1;
   }
 
-  private drawPlayer(ctx: CanvasRenderingContext2D) {
-    const p = this.p;
+  private drawPlayer(ctx: CanvasRenderingContext2D, pl: Pilot) {
+    const p = pl;
+    const col = p.i === 0 ? COL.player : COL.lime;
     const blink = p.invuln > 0 && Math.floor(p.invuln * 18) % 2 === 0;
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -2538,7 +2639,7 @@ export class PaintballGame {
       ctx.globalAlpha = 0.35;
       ctx.save();
       ctx.rotate(p.angle);
-      ctx.fillStyle = COL.player;
+      ctx.fillStyle = col;
       this.rr(ctx, -34, -12, 30, 24, 10);
       ctx.fill();
       ctx.restore();
@@ -2546,33 +2647,18 @@ export class PaintballGame {
     }
     ctx.globalAlpha = blink ? 0.45 : 1;
     // glow
-    const gl = this.glows.get(COL.player);
+    const gl = this.glows.get(col);
     if (gl) {
       ctx.globalAlpha = (blink ? 0.3 : 0.55) * (p.tripleT > 0 || p.rapidT > 0 ? 1.5 : 1);
       ctx.drawImage(gl, -40, -40, 80, 80);
       ctx.globalAlpha = blink ? 0.45 : 1;
-    }
-    if (p.shield > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.75 + 0.2 * Math.sin(this.time * 8);
-      ctx.strokeStyle = "#7ef4ff";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(0, 0, p.r + 10, 0, TAU);
-      ctx.stroke();
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = "#7ef4ff";
-      ctx.beginPath();
-      ctx.arc(0, 0, p.r + 10, 0, TAU);
-      ctx.fill();
-      ctx.restore();
     }
     ctx.rotate(p.angle);
     // marker barrel
     ctx.fillStyle = "#132019";
     this.rr(ctx, 6, -5, 26, 10, 4);
     ctx.fill();
-    ctx.fillStyle = p.reload > 0 ? "#6f8b7f" : p.explosive > 0 ? COL.rusher : COL.player;
+    ctx.fillStyle = p.reload > 0 ? "#6f8b7f" : col;
     this.rr(ctx, 24, -4, 8, 8, 3);
     ctx.fill();
     // body
@@ -2582,10 +2668,10 @@ export class PaintballGame {
     ctx.fillStyle = p.hitFlash > 0.05 ? "#ffffff" : "#eaf5ee";
     this.rr(ctx, -13, -12, 26, 24, 9);
     ctx.fill();
-    ctx.fillStyle = COL.player;
+    ctx.fillStyle = col;
     this.rr(ctx, -13, -12, 9, 24, 6);
     ctx.fill();
-    ctx.fillStyle = COL.grunt;
+    ctx.fillStyle = p.i === 0 ? COL.grunt : COL.boss;
     this.rr(ctx, 4, -12, 9, 24, 6);
     ctx.fill();
     // mask
@@ -2608,14 +2694,14 @@ export class PaintballGame {
     ctx.fill();
     ctx.restore();
 
-    if (this.status === "playing" && this.dying <= 0) {
+    if (this.status === "playing" && this.dying <= 0 && !p.dead) {
       // world-space ammo + reload ring
       ctx.save();
-      ctx.translate(p.x, p.y - 34);
+      ctx.translate(p.x, p.y - (this.duo ? 42 : 34));
       const n = p.mag;
       for (let i = 0; i < n; i++) {
         const on = i < p.ammo;
-        ctx.fillStyle = on ? (p.ammo <= 3 ? COL.rusher : COL.player) : "rgba(233,245,238,0.16)";
+        ctx.fillStyle = on ? (p.ammo <= 3 ? COL.rusher : col) : "rgba(233,245,238,0.16)";
         this.rr(ctx, -n * 2.6 + i * 5.2, 0, 3.6, on ? 8 : 6, 1.4);
         ctx.fill();
       }
@@ -3035,12 +3121,228 @@ export class PaintballGame {
     }
   }
 
+  /* ---------------- réseau : pilote distant + snapshots ---------------- */
+
+  /** L'index pilote est piloté par le réseau ; l'index local passe en commandes primaires. */
+  setNetPilot(idx: number | null) {
+    this.netPilot = idx === null ? null : { idx, input: null };
+  }
+  setLocalIndex(i: number) {
+    this.localIdx = i;
+    this.queued = { dash: false, reload: false };
+  }
+  localPilot(): Pilot {
+    return this.localIdx === 1 && this.p2 ? this.p2 : this.p;
+  }
+  setRemoteInput(input: RemoteInput | null) {
+    if (this.netPilot) this.netPilot.input = input;
+  }
+  /** Entrées du joueur local, prêtes à partir sur le réseau (one-shots consommés). */
+  getLocalInput(): RemoteInput {
+    const p = this.localPilot();
+    const out: RemoteInput = {
+      mx: this.axisX(0),
+      my: this.axisY(0),
+      aim: p.angle,
+      fire: this.firing(0),
+      dash: this.queued.dash,
+      reload: this.queued.reload,
+    };
+    this.queued = { dash: false, reload: false };
+    return out;
+  }
+  getSnapshot(): Snapshot {
+    return {
+      t: this.time,
+      wave: this.wave,
+      score: Math.floor(this.score),
+      kills: this.kills,
+      pilots: this.pilots().map((pl) => ({
+        x: pl.x, y: pl.y, a: pl.angle, hp: pl.hp, ammo: pl.ammo, dead: pl.dead,
+      })),
+      enemies: this.enemies.slice(0, 24).map((e) => ({
+        x: e.x,
+        y: e.y,
+        a: e.angle,
+        hp: e.hp,
+        kind: e.type === "grunt" ? 0 : e.type === "rusher" ? 1 : e.type === "sniper" ? 2 : 3,
+      })),
+    };
+  }
+  /** Côté client : on aligne la réplique locale sur l'état de l'hôte. */
+  applySnapshot(s: Snapshot) {
+    if (!this.p2) return;
+    const mine = this.netPilot ? this.netPilot.idx : 0;
+    const remote = mine === 0 ? this.p : this.p2;
+    const self = mine === 0 ? this.p2 : this.p;
+    const r = s.pilots[mine];
+    const l = s.pilots[mine === 0 ? 1 : 0];
+    if (r) {
+      remote.x = r.x;
+      remote.y = r.y;
+      remote.angle = r.a;
+      remote.hp = r.hp;
+      remote.ammo = r.ammo;
+      remote.dead = r.dead;
+    }
+    if (l) {
+      self.hp = l.hp;
+      self.ammo = l.ammo;
+      self.dead = l.dead;
+    }
+    const used = new Set<number>();
+    for (const n of s.enemies) {
+      let best = -1;
+      let bd = 1e9;
+      for (let i = 0; i < this.enemies.length; i++) {
+        if (used.has(i)) continue;
+        const d = Math.hypot(this.enemies[i].x - n.x, this.enemies[i].y - n.y);
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
+      }
+      if (best < 0) continue;
+      used.add(best);
+      const e = this.enemies[best];
+      e.x = n.x;
+      e.y = n.y;
+      e.angle = n.a;
+      e.hp = n.hp;
+    }
+    this.score = Math.max(this.score, s.score);
+    this.wave = Math.max(this.wave, s.wave);
+    this.kills = Math.max(this.kills, s.kills);
+  }
+
+  /* ---------------- sauvegarde de partie (reprendre plus tard) ---------------- */
+
+  /** État complet de la partie en cours, prêt à être stocké (local ou base). */
+  exportSave(): SaveState | null {
+    if (this.status !== "playing" && this.status !== "paused") return null;
+    if (this.dying > 0 || this.allDown()) return null;
+    let paint: string | undefined;
+    try {
+      const w = 460;
+      const h = Math.max(1, Math.round((this.paint.height / Math.max(1, this.paint.width)) * w));
+      const tmp = document.createElement("canvas");
+      tmp.width = w;
+      tmp.height = h;
+      const tg = tmp.getContext("2d");
+      if (tg) {
+        tg.drawImage(this.paint, 0, 0, w, h);
+        const data = tmp.toDataURL("image/jpeg", 0.55);
+        if (data.length < 320_000) paint = data;
+      }
+    } catch {
+      paint = undefined;
+    }
+    return {
+      v: 1,
+      at: Date.now(),
+      label: `VAGUE ${this.wave} · ${Math.floor(this.score).toLocaleString()} PTS`,
+      duo: this.duo,
+      gw: this.gw,
+      gh: this.gh,
+      score: Math.floor(this.score),
+      wave: this.wave,
+      kills: this.kills,
+      shots: this.shots,
+      hits: this.hits,
+      streak: this.streak,
+      maxCombo: this.maxCombo,
+      time: this.time,
+      between: this.between,
+      spawnT: this.spawnT,
+      maxAlive: this.maxAlive,
+      pending: this.pending.slice(),
+      pilots: this.pilots().map((pl) => ({ ...pl })),
+      enemies: this.enemies.map((e) => ({ ...e })),
+      covered: gridToB64(this.covered),
+      paint,
+    };
+  }
+
+  /** Reprend une partie sauvegardée, exactement là où elle s'était arrêtée. */
+  importSave(s: SaveState) {
+    this.sfx.unlock();
+    this.duo = !!s.duo;
+    this.resetRun();
+    this.score = s.score;
+    this.wave = s.wave;
+    this.kills = s.kills;
+    this.shots = s.shots;
+    this.hits = s.hits;
+    this.streak = s.streak;
+    this.maxCombo = s.maxCombo;
+    this.time = s.time;
+    this.between = s.between || 0;
+    this.spawnT = s.spawnT || 0;
+    this.maxAlive = s.maxAlive || 8;
+    this.pending = (s.pending ?? []).slice() as EType[];
+    this.p = { ...s.pilots[0], i: 0, dead: !!s.pilots[0]?.dead };
+    this.p2 = s.duo && s.pilots[1] ? { ...s.pilots[1], i: 1 } : null;
+    this.enemies = (s.enemies ?? []).map((e) => ({ ...e }));
+    this.pilots().forEach((pl) => {
+      pl.invuln = Math.max(pl.invuln, 1.2);
+    });
+
+    const grid = b64ToGrid(s.covered ?? "");
+    this.covered.fill(0);
+    this.coveredCount = 0;
+    if (s.gw && s.gh && (s.gw !== this.gw || s.gh !== this.gh)) {
+      for (let y = 0; y < this.gh; y++) {
+        for (let x = 0; x < this.gw; x++) {
+          const sx = Math.min(s.gw - 1, Math.floor((x / this.gw) * s.gw));
+          const sy = Math.min(s.gh - 1, Math.floor((y / this.gh) * s.gh));
+          if (grid[sy * s.gw + sx]) {
+            const i = y * this.gw + x;
+            this.covered[i] = 1;
+            this.coveredCount++;
+          }
+        }
+      }
+    } else if (grid.length === this.covered.length) {
+      this.covered.set(grid);
+      for (let i = 0; i < grid.length; i++) if (grid[i]) this.coveredCount++;
+    }
+
+    this.clearPaint();
+    if (s.paint) {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          this.paintCtx.drawImage(img, 0, 0, this.W, this.H);
+        } catch {
+          /* terrain propre : la partie reste jouable */
+        }
+      };
+      img.src = s.paint;
+    }
+
+    this.trauma = 0;
+    this.flashAmt = 0;
+    this.dying = 0;
+    this.tutorialT = 0;
+    this.banners.length = 0;
+    this.telegraphs.length = 0;
+    this.parts.length = 0;
+    this.bullets.length = 0;
+    this.setStatus("playing");
+    this.loopStart();
+    this.banner("REPRISE", "VAGUE " + this.wave, COL.lime, 1.8);
+    this.sfx.wave();
+  }
+
   /* ---------------- game over ---------------- */
 
   private gameOver() {
     this.setStatus("gameover");
     const res: RunResult = {
+      duo: this.duo,
       score: Math.floor(this.score),
+      kills2: this.killsBy[1],
+      hits2: this.hitsBy[1],
       wave: this.wave,
       kills: this.kills,
       shots: this.shots,

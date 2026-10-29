@@ -152,6 +152,20 @@ export class Sfx {
     this.tone(300, 0.7, "square", 0.1, 60, 0.12);
     this.burst(0.8, 0.14, 400, 0.5, "lowpass", 0.1, 0.2);
   }
+  shield() {
+    this.tone(520, 0.16, "triangle", 0.12, 900);
+    this.tone(780, 0.24, "sine", 0.08, 1240, 0.05);
+    this.burst(0.12, 0.1, 1800, 0.7, "bandpass");
+  }
+  ricochet() {
+    this.tone(900 + Math.random() * 320, 0.07, "square", 0.06, 420);
+    this.burst(0.06, 0.1, 2600, 0.8, "highpass");
+  }
+  boom() {
+    this.burst(0.34, 0.32, 420, 0.6, "lowpass", 0, 0.22);
+    this.tone(140, 0.34, "sawtooth", 0.16, 46);
+    this.tone(90, 0.5, "sine", 0.14, 34, 0.04);
+  }
   ui() {
     this.tone(700, 0.05, "square", 0.06, 980);
   }

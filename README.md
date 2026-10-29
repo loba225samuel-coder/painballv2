@@ -1,277 +1,266 @@
 # PAINTBALL 2D — Splat Arena
 
-Arène de paintball vue de dessus, 100 % canvas + React. Un build, un seul fichier HTML autonome, prêt pour Netlify.
+> Arène de paintball vue de dessus, à la croisée d'un arcade à l'ancienne et d'un jeu de peinture.
+> Tout ce que tu rates, tu le peins. Et ce que tu peins, ça rapporte.
 
-**Technique :** React 19 · Vite 7 · Tailwind 4 (`@theme`) · TypeScript strict · Canvas 2D (court pré-bavé, éclats de peinture en sprites mis en cache) · WebAudio synthétisé (zéro asset son) · `vite-plugin-singlefile`.
+**React 19 · Vite 7 · TypeScript strict · Canvas 2D · WebAudio · WebRTC · Supabase · Netlify**
 
----
-
-## Mettre en ligne
-
-Deux chemins, selon que tu veux un site qui suit Git ou juste une URL tout de suite.
-
-### ⏱ Le plus rapide — zip + API Netlify (2 min, sans Git)
-
-```bash
-npm run build
-```
-
-Rends-toi sur **<https://app.netlify.com/drop>** et glisse le dossier **`dist/`** dans la zone prévue.
-L'URL `https://<hasard>.netlify.app` s'affiche tout de suite ; *Site settings → Change site name* pour un nom propre.
-
-Équivalent en ligne de commande (aucune installation, `curl` + `zip` seulement) :
-
-```bash
-NETLIFY_AUTH_TOKEN=xxx ./scripts/deploy.sh
-# puis, une fois le site créé :
-NETLIFY_AUTH_TOKEN=xxx NETLIFY_SITE_ID=yyy ./scripts/deploy.sh
-```
-
-Le token se crée sur *app.netlify.com → User actions → Personal access tokens*. Le script build, zipe `dist/`, pousse sur l'API et renvoie l'URL.
-
-### Méthode 1 — import depuis Git (recommandé)
-
-Le dépôt est **déjà initialisé et committé** ici (`git log` le confirme) : il ne manque que le remote.
-
-```bash
-# sur GitHub : « New repository », aucun fichier, ni README ni .gitignore
-git remote add origin git@github.com:<ton-compte>/paintball-2d.git
-git push -u origin main
-```
-
-Ensuite, sur Netlify :
-
-1. **Add new site → Import an existing project** → choisir le dépôt.
-2. Vérifier (ils sont déjà pré-remplis par le `netlify.toml`) :
-   - Build command : `npm run build`
-   - Publish directory : `dist`
-3. **Deploy**, puis *Domain management* pour brancher un nom de domaine.
-
-Chaque push sur la branche par défaut relance un build : la prod suit Git toute seule.
-
-### Méthode 2 — glisser-déposer détaillé
-
-```bash
-npm install
-npm run build          # génère dist/index.html, autonome (JS + CSS inlinés)
-```
-
-L'alternative au bouton : `./scripts/deploy.sh` (voir plus haut).
-
-### Méthode 3 — CLI
-
-```bash
-npm i -g netlify-cli
-netlify login
-netlify link                    # ou : netlify init
-netlify deploy                  # préversion, dans .netlify/ (ignoré par Git)
-netlify deploy --prod
-netlify dev                     # dév local avec la config du netlify.toml
-```
+Jouable au clavier comme au doigt, seul, à deux sur le même écran, ou en co-op en ligne dans un salon privé.
+Un build, un seul fichier HTML autonome, déployable n'importe où.
 
 ---
 
-## Publier à chaque push (optionnel, mais confortable)
+## Le principe
 
-Le dépôt embarque `.github/workflows/netlify.yml` : build + types + déploiement automatiques.
+Tu pilotes un marqueur de paintball dans une arène fermée. Les adversaires arrivent par vagues ; chacun que
+tu éclabousses paie des points, et **chaque tir manqué tache le sol**. Le terrain peint n'est pas un décor :
+il est mesuré en continu et versé en **bonus de fin de vague**. Autrement dit, même quand tu paniques et que
+tu arroses dans tous les sens, tu travailles pour ton score.
 
-1. Pousse le projet sur GitHub (voir Méthode 1).
-2. Crée le site sur Netlify une première fois (glisser-déposer suffit), puis note :
-   - **Site ID** → *Site configuration → Identification*
-   - **Access token** → *User applications → Personal access tokens*
-3. Sur GitHub : *Settings → Secrets and variables → Actions* → ajoute `NETLIFY_AUTH_TOKEN` et `NETLIFY_SITE_ID`.
-4. `git push` → le site se met à jour, et chaque PR reçoit un aperçu jetable en commentaire.
-
-Le workflow dépose aussi `dist/` en **artefact** (onglet Actions) : utile pour archiver ou redéployer à la main.
-
-## Autres hébergeurs statiques
-
-Le build ne produit qu'un `index.html` autonome : n'importe quel hébergeur statique convient.
-
-| Hôte | Ce qu'il faut faire | Remarque |
-| --- | --- | --- |
-| **Cloudflare Pages** | Framework « Vite », build `npm run build`, dossier `dist` | Équivalent le plus proche de Netlify |
-| **Vercel** | Détection Vite automatique | Rien à régler |
-| **GitHub Pages** | Publier `dist/` sur la branche `gh-pages` | Sous-domaine `/<repo>/` : le manifeste et l'icône (`/manifest.webmanifest`, `/icons/…`) sont pointés en racine, donc l'installation « écran d'accueil » fonctionne moins bien — le jeu, lui, tourne |
-| **N'importe quel serveur / S3 / OVH** | Copier le contenu de `dist/` à la racine | Aucun serveur applicatif nécessaire |
+À cela s'ajoute le **combo** : enchaîner les splats sans te faire toucher fait monter le multiplicateur
+(jusqu'à **x7**). Le jeu demande donc deux choses en même temps — être précis, et être sale.
 
 ---
 
-## Notes de déploiement
+## Fonctionnalités
 
-- **Cache** : `index.html` en `max-age=0, must-revalidate` (un déploiement est visible immédiatement) ; tout ce qui passerait par `/assets/*` est `immutable` un an.
-- **En-têtes** : `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (le jeu ne demande ni géoloc, ni caméra, ni micro), `Cross-Origin-Opener-Policy`.
-- **Mobile** : `viewport-fit=cover` + `env(safe-area-inset-*)` — le HUD et le pad DASH évitent l'encoche et la barre d'accueil, et les limites du terrain s'ajustent en conséquence. Favicon et icône tactile en SVG inline (aucun fichier externe, donc aucun 404 possible). « Ajouter à l'écran d'accueil » lance le jeu en plein écran.
-- **Polices** : Bungee + Barlow servies par Google Fonts (`preconnect` inclus pour le LCP). Pour un site 100 % auto-hébergé : `npm i @fontsource/bungee @fontsource/barlow`, remplacer le `<link>` par des `@import` en tête de `src/index.css`, puis `npm run build`.
-- **Scores** : classement stocké dans le `localStorage` du navigateur (top 8 local, clé `pb2d.scores.v1`). Aucun back-end, aucun compte : chaque appareil garde son tableau. Pour un classement mondial, une fonction Netlify + un stockage (Blobs ou Tables) suffit — le moteur expose déjà un `RunResult` complet (score, vague, éclats, tirs, précision, série, couverture, temps) à l'écran de game-over.
+### Le combat
+- **Vagues infinies** qui montent en puissance (3 + 1,7 × n adversaires, jusqu'à 15 simultanés).
+- **4 types d'adversaires** avec des comportements distincts : le GRAUNT qui tient la position, le RUSHER
+  qui charge et percute, le SNIPER qui annonce son tir par un laser, et le **BOSS** toutes les 5 vagues
+  (rafales en éventail, 420 PV, gros butin).
+- **Marqueur complet** : chargeur de 12 billes, recharge à la demande ou automatique, dash à i-frames,
+  recul, dispersion de tir, jauge de munitions au-dessus de ta tête.
+- **7 ramassages** : OVERCLOCK, TRIPLE STREAM, +PAINT, BOUCLIER, RICOCHET, BILLE EXPLOSIVE, ROULEAU —
+  chacun avec sa couleur, son halo et son son.
+- **Effets jouissifs** : tremblement d'écran gradué au trauma, gel d'image à l'éclat, flashs colorés,
+  particules, ondes de choc, textes flottants, éclats de peinture qui deviennent des décors permanents.
 
-## Version mobile
-
-Le jeu détecte `(pointer: coarse)` et bascule en **schéma pouces** : deux pads flottants + un cluster de boutons sous le pouce droit.
-
-| Zone | Action |
+### Les modes
+| Mode | Description |
 | --- | --- |
-| Moitié gauche (glisser) | Se déplacer — le pad apparaît sous le doigt |
-| Moitié droite (glisser) | Viser **et** tirer automatiquement en poussant à fond |
-| Bouton **FEU** (maintenir) | Tir avec auto-visée sur la cible la plus proche ; l'anneau montre le chargeur |
-| Bouton **DASH** | Dash + i-frames, anneau de recharge |
-| Bouton **CHARGE** | Rechargement manuel (auto à 0 bille) |
+| **SOLO** | le classique : un pilote, les vagues, le score |
+| **DUO LOCAL** | deux pilotes sur un même clavier (WASD + flèches), revive en fin de vague |
+| **CO-OP EN LIGNE** | salon privé à 4 lettres, WebRTC, hôte autoritaire |
+| **VERSUS 1v1** | à venir — le seul qui exige un vrai netcode compétitif |
 
-Adaptations mobiles :
+### Le confort
+Pause complète · **sauvegarde de partie** (« revenir plus tard », reprise exacte en plein milieu d'une vague) ·
+plein écran · son et vibration activables · écran qui ne s'éteint pas pendant une partie ·
+rotation du téléphone = pause automatique · auto-visée au pouce · HUD complet et lisible en un coup d'œil.
 
-- **Plein écran réel** : le canvas occupe tout le viewport, sans bandes noires. En multijoueur, une caméra suit le joueur (ou le milieu des deux joueurs en local), avec mini-carte et flèches de hors-champ.
+### La progression
+Records et statistiques sauvegardés (meilleur score, vague max, éclats, temps de jeu, peinture cumulée),
+**classement mondial**, historique des parties, et sauvegarde de partie synchronisée entre appareils.
+Tout fonctionne **hors ligne** (repli localStorage) et se synchronise dès que le réseau revient.
 
-- **Plein écran** demandé au premier `JOUER` (là où l'API existe), puis bouton dans le HUD et la pause. Sinon, « Ajouter à l'écran d'accueil » + `manifest.webmanifest` : lancement en `fullscreen`, `orientation: landscape`.
-- **`viewport-fit=cover` + `env(safe-area-inset-*)`** : HUD, pads et bouton DASH évitent l'encoche ; les limites du terrain s'ajustent (max 20 px CSS par bord).
-- **Paysage conseillé** : un encart tourné apparaît en portrait au premier lancement (dismissible, mémorisé). En portrait le moteur zoome aussi (court ≈ 520×1125 au lieu de 640×1385) pour garder le combat dense, et le nombre d'ennemis simultanis est plafonné à 9.
-- **Haptique** : `navigator.vibrate` sur dash (14 ms), éclat encaissé, élimination et mort du boss. Bouton de coupure dans le HUD et la pause (`V` au clavier).
-- **Assistance de visée** au stick droit (aimant à ±0,3 rad) et pied mort de 7 px : un pouce n'est pas une souris.
-- **Budget FX** : particules plafonnées à 430 (760 sur desktop), pas de scanlines, DPR bridé sur grands écrans — 60 fps visé sur téléphone milieu de gamme.
-- **Rotation = pause** automatique, pour ne pas mourir pendant le reflow.
-- **Wake lock** : l'écran ne s'éteint pas pendant une partie (re-demandé au retour d'onglet).
+---
 
-## Sauvegarde de progression (Supabase)
+## Les chiffres du jeu
 
-Le jeu peut garder une **carrière complète** : pseudo, couleur, grade, record, score cumulé, meilleure vague, précision, couverture, temps de jeu, historique des parties et classement cloud par mode.
+| Élément | Valeur |
+| --- | --- |
+| Vie | 6 peintures · 1,15 s d'invulnérabilité après un éclat |
+| Chargeur | 12 billes · recharge 0,95 s |
+| Cadence | 0,108 s par tir · 0,062 s en OVERCLOCK |
+| Dash | 0,17 s de propulsion · 1,05 s de recharge · 0,34 s de i-frames |
+| Combo | x1 → x7 (seuils 2 / 4 / 7 / 11 / 16 / 22 splats) · fenêtre 3,4 s |
+| Bonus de vague | 220 × vague + couverture de peinture × 1 400 · +1 PV |
+| GRAUNT | 60 PV · 120 pts |
+| RUSHER | 48 PV · 170 pts |
+| SNIPER | 52 PV · 220 pts |
+| BOSS | 420 PV · 1 600 pts |
+| Drops | 24 % à la mort · 100 % premium sur un boss |
 
-- Projet : `https://ipdohwwyletjrkdrlyma.supabase.co`
-- Migrations : [`202610280001_progression.sql`](./supabase/migrations/202610280001_progression.sql) puis [`202610280002_saved_runs.sql`](./supabase/migrations/202610280002_saved_runs.sql)
-- Guide : [`supabase/README.md`](./supabase/README.md)
+---
 
-### Activation (une seule fois)
-
-1. Supabase → **SQL Editor** : collez la migration `202610280001_progression.sql`, puis **Run** ; faites de même avec `202610280002_saved_runs.sql`.
-2. Supabase → **Authentication → Providers** : activez **Anonymous Sign-Ins** (le mode invité). L’email est déjà actif.
-3. Supabase → **Authentication → URL Configuration** : mettez votre URL Netlify en `Site URL`, et ajoutez `http://localhost:5173/**` en Redirect URLs.
-4. Netlify → **Environment variables** :
-   ```
-   VITE_SUPABASE_URL=https://ipdohwwyletjrkdrlyma.supabase.co
-   VITE_SUPABASE_ANON_KEY=sb_publishable_…
-   ```
-   Puis redéployez. En local, `.env.example` fournit les mêmes variables.
-
-### Utilisation
-
-Accueil → **PROGRESSION** → **Continuer en invité** (ou lien magique par email).
-Chaque partie solo, coop ou versus terminée est enregistrée automatiquement. Les réglages son/vibration et le pseudo sont synchronisés. Sans connexion, le jeu garde le secours local (`localStorage`).
-
-### Reprendre une partie plus tard
-
-En solo, un petit bouton **SAUVER** est visible dans le HUD (et `Ctrl+S`). La pause propose **SAUVEGARDER ET QUITTER**.
-À l’accueil, une carte **PARTIE EN COURS · VAGUE 5** permet de **REPRENDRE** : score, vague, ennemis, bonus, couverture et peinture du terrain sont restaurés. La sauvegarde est locale, et cloud si le joueur est connecté. Elle s’adapte à un autre écran / une autre orientation.
-
-### Sécurité
-
-La clé `sb_publishable_…` est publique : elle identifie le projet, elle ne donne pas tous les droits.
-Les tables ont **RLS** activée ; un joueur ne lit que ses lignes. L’écriture des parties/stats passe par `record_run()` en `security definer`, qui prend l’identité dans le JWT et borne les valeurs. Le classement public ne renvoie que pseudo, couleur, score, vague, couverture, grade et date.
-
-## Bonus ramassables
-
-Les capsules apparaissent après les éliminations, avec une table de drop partagée entre solo et multijoueur.
-
-| Bonus | Effet | Durée / charges |
-| --- | --- | --- |
-| **Soin / Peinture** | Rend 2 points de vie. | instantané |
-| **Overclock** | Recharge complète + tir rapide. | 5 s |
-| **Triple jet** | Trois projectiles par tir. | 9 s |
-| **Bouclier de peinture** | Absorbe 2 impacts, bulle visible autour du joueur. | 10 s / 2 charges |
-| **Ricochet** | Les projectiles rebondissent une fois sur les bunkers. | 8 s |
-| **Bille explosive** | Le prochain tir explose en zone, endommage les groupes et peint largement. | 1 charge, max 2 |
-| **Rouleau de peinture** | Le joueur peint le sol en se déplaçant. | 6 s |
-
-Les bonus actifs sont affichés dans le HUD avec icône, nom, durée restante et charges. En multijoueur, ils apparaissent aussi sur les cartes joueurs. Les effets sont sauvegardés avec la partie en cours.
-
-## Multijoueur progressif
-
-Le solo est inchangé. Depuis l’accueil, **MULTIJOUEUR** ouvre un écran dédié avec trois étapes :
-
-1. **COOP à 2, même écran** — deux joueurs, vagues partagées, pas de tir allié, réanimation en restant 1,5 s près du coéquipier à terre.
-2. **COOP en ligne, salon privé** — code à 6 caractères, lien d’invitation, salon prêt/pas prêt, reconnexion 20 s.
-3. **VERSUS 1 contre 1** — 90 s, réapparition rapide, chaque case peinte peut être volée à l’adversaire ; le territoire compte dans le score final.
-
-### Commandes du duo local
-
-| | Joueur 1 | Joueur 2 |
-| --- | --- | --- |
-| Clavier | WASD + souris · Espace tirer · Maj dash · R charger | Flèches · IJKL viser · Entrée tirer · Maj droit dash · Retour charger |
-| Manette | 1ʳᵉ manette si deux sont branchées | 2ᵉ manette, ou la seule manette branchée |
-| Mobile | Tactile (gauche bouge, droite vise, FEU/DASH/CHG) | Manette conseillée ; sinon préférez le mode en ligne |
-
-### Jouer en ligne tout de suite (local)
-
-```bash
-# terminal 1 : serveur de salons
-npx tsx server/index.ts
-
-# terminal 2 : front
-VITE_MULTIPLAYER_URL=ws://localhost:8787 npm run dev
-```
-
-Créez un salon, partagez le code, ouvrez une seconde fenêtre. Le serveur est autoritaire : il valide tirs, dégâts, scores et peinture.
-
-### Mettre le multijoueur en production
-
-1. Déployez le serveur avec le blueprint **`render.yaml`** (Render → New → Blueprint), ou sur Fly.io / un VPS avec `npx tsx server/index.ts`.
-2. Sur Netlify, ajoutez la variable d’environnement :
-   ```
-   VITE_MULTIPLAYER_URL=wss://votre-serveur.onrender.com
-   ```
-3. Redéployez le front. Sans cette variable, le duo local reste jouable et l’écran en ligne explique quoi configurer.
-
-Détails du protocole, variables et reconnexion : [`server/README.md`](./server/README.md).
-
-### Sous le capot
-
-- `src/game/rules.ts` : constantes communes (court, ennemis, joueur).
-- `src/game/mpSim.ts` : simulation pure, utilisée par le duo local **et** le serveur.
-- `src/game/multiplayer.ts` : rendu, entrées clavier/manettes/tactile, prédiction locale + réconciliation.
-- `server/index.ts` : salons WebSocket, 60 Hz, snapshots 20 Hz, heartbeat, limites anti-abus.
-
-## Jouer
+## Comment jouer
 
 | Clavier | Action | Tactile |
 | --- | --- | --- |
 | `W A S D` / flèches | Se déplacer | Glisser sur la moitié gauche |
 | Souris | Viser | Glisser sur la moitié droite (tir auto en poussant) |
-| `Clic G` / `Espace` | Arroser le terrain | — (automatique) |
-| `Maj` | Dash + i-frames | Pad DASH |
-| `R` | Recharger | — (auto à 0 bille) |
-| `P` / `Échap` | Pause | Bouton pause en haut à droite |
-| `M` / `V` / `F` | Son / vibration / plein écran | Boutons son, vibration, plein écran |
+| `Clic` / `Espace` | Arroser | — (automatique) |
+| `Maj` | Dash + i-frames | Pad **DASH** |
+| `R` | Recharger | Pad **CHARGE** |
+| `P` / `Échap` | Pause | Bouton pause |
+| `M` / `V` / `F` | Son / vibration / plein écran | Boutons dédiés |
 
-Le principe : éclabousser les vagues, enchaîner les splats pour le multiplicateur (jusqu'à x6) et **peindre le court** — chaque tir raté tache le sol, et la couverture de peinture est versée en bonus à la fin de la vague. Boss tous les 5 niveaux.
+En **duo**, le pilote 2 utilise les flèches, `Entrée` pour tirer, `Maj droit` pour dasher et `.` pour recharger.
 
-## Scripts
+---
+
+## Sous le capot
+
+### Architecture
+Le jeu est une application React **montée autour d'un canvas**. React ne gère que les écrans (accueil, pause,
+fin de partie) et le HUD ; toute la boucle de jeu vit dans une classe autonome qui ne connaît pas React :
+
+```
+src/game/engine.ts    boucle 60 fps, IA, collisions, peinture, particules, sauvegarde, snapshots
+src/game/audio.ts     kit de sons synthétisés (WebAudio, zéro fichier audio)
+src/game/net.ts       protocole multi-joueur + client WebRTC
+src/components/       Hud, écrans, fiche de jeu, panneaux en ligne
+src/lib/              scores locaux, progression Supabase
+```
+
+Cette séparation est volontaire : le moteur peut être testé **sans navigateur** (je l'exécute dans un harnais
+Node avec un canvas simulé pour vérifier les collisions, les vagues, la sauvegarde ou le protocole réseau).
+
+### La boucle de jeu
+`requestAnimationFrame` avec un pas de temps borné (jamais plus de 1/15 s, pour éviter l'effet catapulte après
+un onglet en arrière-plan). Le gel d'image (*hitstop*) est appliqué en mettant simplement le pas à zéro : les
+impacts semblent « mordre » sans jamais désynchroniser la simulation.
+
+### La peinture
+C'est la pièce maîtresse. Le terrain possède **deux couches** :
+- un décor **pré-cuit** une seule fois (sol, lignes, bunkers, marquages, vignettage) ;
+- une couche de **peinture dynamique** sur laquelle on tamponne des sprites d'éclats pré-rendus (4 variantes
+  par couleur, mis en cache) — jamais de dégradé ni de filtre par image.
+
+Une **grille de couverture** (une cellule de 46 px) alimente le score, ce qui permet de sérialiser l'état du
+terrain en quelques centaines d'octets. C'est ce qui rend la sauvegarde de partie légère.
+
+### Le son
+Aucun fichier audio : les sons sont **synthétisés à la volée** (oscillateurs + bruit filtré). Gain master,
+déclenchement depuis un geste utilisateur (politique d'autoplay), et un son différent par événement —
+c'est ce qui donne sa « texture » à chaque éclat.
+
+### Le netcode (co-op en ligne)
+- **Hôte autoritaire** : l'hôte simule tout. Le client n'envoie que ses **entrées** (6 champs, ~30 Hz) ;
+  l'hôte diffuse un **snapshot** (~200 octets, 20 Hz) avec les positions, PV, munitions et score.
+- Le client est une **réplique** : la peinture et les particules sont calculées localement (cosmétique).
+- **Pas de rollback ici** : en co-op on coopère. C'est le versus qui imposera la prédiction + rollback.
+- **Signalisation** : une Netlify Function (`netlify/functions/signal.ts`) stocke l'offre/réponse du salon dans
+  Netlify Blobs. En cas d'indisponibilité, l'interface bascule sur un **échange manuel** de SDP.
+
+### La sauvegarde
+`exportSave()` produit un état complet : score, vague, pilotes (PV, munitions, pouvoirs), ennemis vivants,
+vagues à venir, **grille de couverture** et une image compressée du court. `importSave()` restaure le tout —
+y compris sur un **autre format d'écran** (la grille est rééchantillonnée sans perte). Stockage double :
+`localStorage` (immédiat, hors ligne) + table Supabase (suit le joueur d'un appareil à l'autre).
+
+### Performance
+Décor pré-cuit, sprites d'éclats en cache, particules plafonnées (760 sur desktop, 430 sur mobile),
+densité de pixels réduite sur grands écrans, pas de scanlines sur mobile. Le canvas **ne fige jamais sa
+taille en pixels** : le CSS pilote l'affichage, le moteur ne gère que la résolution interne, et il revérifie
+la taille toutes les 8 images en plus d'un `ResizeObserver` — c'est ce qui garantit que le jeu remplit
+l'écran à la rotation comme au rétractage de la barre d'URL.
+
+---
+
+## Démarrage
 
 ```bash
-npm run dev       # Vite + HMR
-npm run build     # → dist/ (index.html autonome ~321 Ko, ~97 Ko gzip + manifeste/icône)
-npm run preview   # sert le build localement
-npx tsc --noEmit  # typage strict
+npm install
+npm run dev        # serveur de développement + HMR
+npm run build      # -> dist/index.html autonome (~586 ko, ~168 ko gzip)
+npm run preview    # sert le build localement
+npx tsc --noEmit   # typage strict
 ```
 
-## Structure
+Node 22 recommandé (voir `.nvmrc`).
+
+---
+
+## Déploiement
+
+Le dépôt contient déjà [`netlify.toml`](./netlify.toml) : build `npm run build`, publish `dist`, Node 22,
+redirect SPA, en-têtes de cache et de sécurité, et le dossier des fonctions. Netlify le lit automatiquement.
+
+| Méthode | Comment |
+| --- | --- |
+| **Git (recommandé)** | Netlify → *Add new site → Import an existing project*. Chaque push sur `main` publie. |
+| **Glisser-déposer** | `npm run build` puis déposer `dist/` sur <https://app.netlify.com/drop> |
+| **Script** | `NETLIFY_AUTH_TOKEN=xxx ./scripts/deploy.sh` (crée le site, renvoie l'URL) |
+| **CI** | `.github/workflows/netlify.yml` : types + build + déploiement à chaque push, aperçu par PR |
+
+Pour activer la CI, ajoute les secrets `NETLIFY_AUTH_TOKEN` et `NETLIFY_SITE_ID` dans
+*GitHub → Settings → Secrets and variables → Actions*.
+
+Le build est **autonome** (JS et CSS inlinés par `vite-plugin-singlefile`) : n'importe quel hébergeur statique
+convient — Cloudflare Pages, Vercel, un bucket S3, un simple serveur web.
+
+---
+
+## Base de données (Supabase)
+
+Le jeu fonctionne **sans base** (tout est en local). Supabase ajoute la progression et le classement mondial.
+
+| Objet | Rôle |
+| --- | --- |
+| `profiles` | progression agrégée (record, vague max, éclats, parties, temps, peinture cumulée) |
+| `runs` | chaque partie terminée, figée ensuite (anti-triche douce) |
+| `leaderboard` | vue top 50 mondiale, lisible par tout le monde |
+| `saves` | une sauvegarde de partie par joueur, privée (RLS) |
+| `submit_run()` | RPC : dépose la partie **et** met à jour la progression en une passe |
+| `handle_new_user()` | trigger : tout nouveau compte (y compris anonyme) a son profil |
+
+Sécurité par **RLS** : chacun n'écrit que ses lignes, les classements sont publics, et un score déposé ne peut
+plus être modifié. Le compte est **anonyme** (aucun mot de passe), créé à la **première écriture** seulement —
+une simple visite ne remplit donc pas la base.
+
+Installation : coller [`supabase/schema.sql`](./supabase/schema.sql) dans le SQL Editor, puis activer
+*Authentication → Sign In / Up → Anonymous sign-ins*. Le fichier est réexécutable. Les requêtes d'entretien
+(purge des visiteurs sans partie, comptes orphelins) sont en fin de fichier, section **ENTRETIEN**.
+
+---
+
+## Multijoueur — par paliers
+
+Le solo ne bouge jamais : chaque palier est **additif**.
+
+| Palier | État | Détail |
+| --- | --- | --- |
+| 1. Co-op 2 joueurs, même écran | ✅ | deux pilotes, revive en fin de vague, score partagé |
+| 2. Co-op en ligne, salon privé | ✅ (bêta) | WebRTC + Netlify Function, code à 4 lettres |
+| 3. Versus 1 contre 1 | ⏳ | nécessite prédiction + rollback, état de peinture synchronisé (RLE) |
+
+Le protocole (champs échangés, fréquences, repli manuel) est détaillé dans le README de `src/game/net.ts`.
+
+---
+
+## Mobile
+
+Le jeu est pensé **pouce d'abord** : deux pads flottants (déplacement à gauche, visée + tir à droite), un
+cluster de trois boutons (FEU, DASH, CHARGE) sous le pouce droit, assistance de visée, retour haptique,
+plein écran au lancement, et un `manifest.webmanifest` pour « Ajouter à l'écran d'accueil »
+(lancement en plein écran, orientation paysage). La rotation ne perd rien : partie, peinture et couverture
+sont conservées, et les insets d'encoche sont gérés partout.
+
+---
+
+## Évolutions prévues
+
+- **Bonus** : 19 idées classées par famille et par coût technique dans
+  [`docs/bonus-ramassables.md`](./docs/bonus-ramassables.md) — 4 déjà implémentés (bouclier, ricochet,
+  bille explosive, rouleau).
+- **Versus 1v1** : court fermé, 3 minutes, duel de peinture.
+- **Profils nommés** : vraie authentification (magic link) pour retrouver sa progression partout.
+
+---
+
+## Structure du projet
 
 ```
-index.html                  méta plein écran, manifeste, favicon SVG inline, polices
-public/                     manifest.webmanifest (fullscreen + paysage) + icône d'installation
-render.yaml                 blueprint du serveur de salons (Render)
-.env.example                VITE_MULTIPLAYER_URL
-netlify.toml                build + publish + redirect + en-têtes + [dev]
-.nvmrc / .gitignore         parité Node avec Netlify, exclusions
-src/App.tsx                 monte le canvas, orchestre menu / jeu / pause / game-over
-src/game/engine.ts          boucle solo 60 fps, IA, collisions, peinture du sol, particules
-src/game/rules.ts           règles communes solo / multijoueur
-src/game/mpSim.ts           simulation multijoueur pure (local + serveur)
-src/game/multiplayer.ts     client multijoueur : rendu, entrées, réseau, prédiction
-src/game/mpProtocol.ts      messages client / serveur
-server/index.ts             serveur de salons autoritaire (ws)
-src/game/audio.ts           kit de SFX synthétisé (WebAudio)
-src/components/Hud.tsx      HUD in-game (jauge de peinture, vague, combo, couverture, munitions)
-src/components/Screens.tsx  démarrage, pause, game-over + signature du tableau
-src/lib/scores.ts           tableau des records local (secours)
-src/lib/supabase.ts         client Supabase (clé publishable)
-src/hooks/useProgression.ts session, stats, historique, classement, sauvegarde auto
-src/components/Progression.tsx  vestiaire : compte, carrière, classement
-supabase/migrations/        schéma SQL + RLS + fonctions + sauvegardes en cours
+index.html                    méta plein écran, manifeste, favicon SVG inline, polices
+netlify.toml                  build + publish + redirect + en-têtes
+.github/workflows/netlify.yml CI de déploiement
+scripts/deploy.sh             publication directe via l'API Netlify
+supabase/schema.sql           base de données complète (tables, RLS, RPC, entretien)
+docs/bonus-ramassables.md     conception des extensions de gameplay
+public/                       manifeste d'installation + icône
+src/game/engine.ts            le moteur (~3 400 lignes)
+src/game/audio.ts             sons synthétisés
+src/game/net.ts               protocole + client WebRTC
+src/components/               Hud, Screens, Online, Progress, Sheet
+src/lib/scores.ts             records locaux
+src/lib/cloud.ts              progression et sauvegardes Supabase
 ```
+
+---
+
+## Licence
+
+Projet personnel. Le code est public, les noms PAINTBALL 2D et Splat Arena le sont aussi — réutilise,
+modifie, expérimente.

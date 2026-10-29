@@ -3,11 +3,6 @@ dist/
 dist-ssr/
 *.local
 
-# --- secrets / env local ---
-.env
-.env.*
-!.env.example
-
 # --- deps ---
 node_modules/
 .pnp

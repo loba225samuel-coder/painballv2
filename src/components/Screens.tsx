@@ -17,13 +17,10 @@ import {
   Vibrate,
   Maximize,
   RotateCw,
-  Shield,
-  Users,
-  Cloud,
-  CloudOff,
   Save,
-  History,
   Trash2,
+  History,
+  Shield,
 } from "lucide-react";
 import type { RunResult } from "@/game/engine";
 import { fmtTime, type ScoreRow } from "@/lib/scores";
@@ -273,43 +270,6 @@ const KEYS: [string, string][] = [
   ["P / ÉCHAP", "Pause"],
 ];
 
-function ContinueStrip({
-  meta,
-  onResume,
-  onDeleteSave,
-  busy,
-  compact = false,
-}: {
-  meta: { wave: number; score: number; savedAt: number; label: string };
-  onResume?: () => void;
-  onDeleteSave?: () => void;
-  busy?: boolean;
-  compact?: boolean;
-}) {
-  const when = new Date(meta.savedAt).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-  return (
-    <div className={`panel anim-pop relative flex items-center gap-3 overflow-hidden border-lime-hot/60 ${compact ? "p-2.5" : "p-3"}`}>
-      <div className="stripes absolute inset-y-0 left-0 w-1.5 opacity-80" />
-      <History className="ml-2 h-5 w-5 shrink-0 text-lime-hot" />
-      <div className="min-w-0">
-        <div className="font-cond text-[10px] font-extrabold tracking-[0.24em] text-moss">PARTIE EN COURS</div>
-        <div className={`font-display leading-none text-chalk ${compact ? "text-base" : "text-xl"}`}>VAGUE {meta.wave}</div>
-        <div className="truncate font-cond text-[11px] font-bold tracking-wide text-moss">
-          {meta.score.toLocaleString("fr-FR")} pts · {when}
-        </div>
-      </div>
-      <button onClick={onResume} disabled={busy} className={`btn ml-auto flex shrink-0 items-center gap-2 bg-lime-hot text-court-900 disabled:opacity-50 ${compact ? "px-3 py-2 text-xs" : "px-4 py-2.5 text-sm"}`}>
-        <Play className="h-4 w-4 fill-current" /> {busy ? "…" : "REPRENDRE"}
-      </button>
-      {onDeleteSave && (
-        <button onClick={onDeleteSave} aria-label="Supprimer la sauvegarde" title="Supprimer la sauvegarde" className="panel flex h-9 w-9 shrink-0 items-center justify-center text-moss transition hover:border-magenta-hot hover:text-magenta-hot">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      )}
-    </div>
-  );
-}
-
 function Logo({ small = false }: { small?: boolean }) {
   return (
     <h1
@@ -346,15 +306,83 @@ function Tips({ rows }: { rows: { icon: typeof Target; t: string; d: string }[] 
   );
 }
 
+function ago(ts: number) {
+  const d = Date.now() - ts;
+  if (d < 60_000) return "À L'INSTANT";
+  if (d < 3_600_000) return `IL Y A ${Math.floor(d / 60_000)} MIN`;
+  if (d < 86_400_000) return `IL Y A ${Math.floor(d / 3_600_000)} H`;
+  return `IL Y A ${Math.floor(d / 86_400_000)} J`;
+}
+
+/** Partie en attente : le joueur fatigué reprend plus tard, où il s'était arrêté. */
+export function ResumeCard({
+  save,
+  onResume,
+  onDiscard,
+}: {
+  save: { label: string; wave: number; score: number; at: number };
+  onResume: () => void;
+  onDiscard: () => void;
+}) {
+  return (
+    <div className="panel anim-pop border-lime-hot/60">
+      <div className="flex items-center gap-2 border-b-2 border-line bg-court-700/70 px-3 py-2">
+        <Save className="h-4 w-4 text-lime-hot" />
+        <h3 className="font-display text-[12px] tracking-wide text-chalk">PARTIE EN COURS</h3>
+        <span className="ml-auto flex items-center gap-1.5 font-cond text-[10px] font-extrabold tracking-[0.16em] text-moss">
+          <History className="h-3 w-3" /> {ago(save.at)}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-1 px-3 py-2.5">
+        <div>
+          <div className="font-cond text-[9px] font-extrabold tracking-[0.22em] text-moss">REPRENDRE À</div>
+          <div className="font-display text-xl leading-none text-lime-hot">VAGUE {save.wave}</div>
+        </div>
+        <div>
+          <div className="font-cond text-[9px] font-extrabold tracking-[0.22em] text-moss">SCORE</div>
+          <div className="font-display text-xl leading-none text-chalk">{save.score.toLocaleString()}</div>
+        </div>
+      </div>
+      <div className="flex gap-2 px-3 pb-3">
+        <button onClick={onResume} className="btn flex flex-1 items-center justify-center gap-2 bg-lime-hot py-2.5 text-[13px] text-court-900">
+          <Play className="h-4 w-4 fill-current" /> REPRENDRE LA PARTIE
+        </button>
+        <button
+          onClick={onDiscard}
+          aria-label="Supprimer la sauvegarde"
+          className="btn flex items-center justify-center gap-2 bg-court-600 px-3 py-2.5 text-[11px] text-chalk"
+        >
+          <Trash2 className="h-4 w-4" /> SUPPRIMER
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModeSelect({ duo, onDuo }: { duo: boolean; onDuo: (v: boolean) => void }) {
+  const opt = (v: boolean, label: string, sub2: string) => (
+    <button
+      key={label}
+      onClick={() => onDuo(v)}
+      className={
+        "flex flex-1 flex-col items-start gap-0.5 border-2 px-3 py-2 text-left transition active:translate-y-0.5 " +
+        (duo === v ? "border-cyan-hot bg-cyan-hot/15" : "border-line bg-court-800/60")
+      }
+    >
+      <span className={"font-display text-[12px] " + (duo === v ? "text-cyan-hot" : "text-chalk/70")}>{label}</span>
+      <span className="font-cond text-[10px] font-extrabold tracking-[0.14em] text-moss">{sub2}</span>
+    </button>
+  );
+  return (
+    <div className="flex gap-2">
+      {opt(false, "SOLO", "1 PILOTE")}
+      {opt(true, "DUO LOCAL", "2 PILOTES · 1 CLAVIER")}
+    </div>
+  );
+}
+
 function MobileStart({
   onStart,
-  onMultiplayer,
-  onProgression,
-  cloudStatus,
-  saveMeta,
-  onResume,
-  onDeleteSave,
-  resumeBusy,
   rows,
   best,
   muted,
@@ -364,6 +392,10 @@ function MobileStart({
   fullscreen,
   onFullscreen,
   portrait,
+  duo,
+  onDuo,
+  online,
+  resume,
 }: StartProps) {
   const [seen, setSeen] = useState(() => localStorage.getItem("pb.rotate") === "1");
   return (
@@ -407,32 +439,22 @@ function MobileStart({
 
         {/* zone pouce : action principale en bas */}
         <div className="mt-auto flex flex-col gap-3">
-          {saveMeta && onResume && <ContinueStrip meta={saveMeta} onResume={onResume} onDeleteSave={onDeleteSave} busy={resumeBusy} compact />}
           <div className="flex flex-wrap items-center gap-2">
             <MobileToggles vibe={vibe} onVibe={onVibe} fullscreen={fullscreen} onFullscreen={onFullscreen} />
             <MuteBtn muted={muted} onMute={onMute} />
-            {onProgression && (
-              <button onClick={onProgression} className="panel pointer-events-auto flex h-11 items-center gap-2 px-3 active:translate-y-0.5">
-                {cloudStatus === "guest" || cloudStatus === "account" ? <Cloud className="h-4 w-4 text-lime-hot" /> : <CloudOff className="h-4 w-4 text-gold" />}
-                <span className="font-cond text-[11px] font-extrabold tracking-[0.16em] text-chalk">PROGRESSION</span>
-              </button>
-            )}
             {best > 0 && (
               <span className="ml-auto flex items-center gap-1.5 font-cond text-[11px] font-extrabold tracking-[0.2em] text-gold">
                 <Trophy className="h-4 w-4" /> {best.toLocaleString()}
               </span>
             )}
           </div>
+          {online}
+          {resume}
+          <ModeSelect duo={duo} onDuo={onDuo} />
           <button onClick={onStart} className="btn flex w-full items-center justify-center gap-3 bg-cyan-hot py-4 text-lg text-court-900">
             <Play className="h-6 w-6 fill-current" />
-            SOLO
+            JOUER
           </button>
-          {onMultiplayer && (
-            <button onClick={onMultiplayer} className="btn flex w-full items-center justify-center gap-3 bg-magenta-hot py-3.5 text-base text-court-900">
-              <Users className="h-5 w-5" />
-              MULTIJOUEUR · COOP / VERSUS
-            </button>
-          )}
           <div className="grid grid-cols-2 gap-3">
             <ThumbMap compact />
             <div className="panel p-2.5">
@@ -442,7 +464,7 @@ function MobileStart({
               </div>
               <Tips
                 rows={[
-                  { icon: Zap, t: "COMBO x6", d: "un splat tous les 3,4 s" },
+                  { icon: Zap, t: "COMBO x7", d: "un splat tous les 3,4 s" },
                   { icon: Crosshair, t: "PEINS TOUT", d: "couverture = bonus de fin de vague" },
                   { icon: Sparkles, t: "BOSSE x5", d: "tous les 5 niveaux, gros butin" },
                   { icon: Shield, t: "DASH = I-FRAMES", d: "traverse la peinture" },
@@ -457,7 +479,7 @@ function MobileStart({
   );
 }
 
-function DesktopStart({ onStart, onMultiplayer, onProgression, cloudStatus, saveMeta, onResume, onDeleteSave, resumeBusy, rows, best, muted, onMute }: StartProps) {
+function DesktopStart({ onStart, rows, best, muted, onMute, duo, onDuo, online, resume }: StartProps) {
   return (
     <div className="scroll-thin absolute inset-0 overflow-y-auto">
       <div className="stripes h-2 w-full opacity-70" />
@@ -480,25 +502,15 @@ function DesktopStart({ onStart, onMultiplayer, onProgression, cloudStatus, save
               enchaîne les splats pour le multiplicateur, dash dans les tirs, tiens le plus de vagues possible.
             </p>
 
-            {saveMeta && onResume && (
-              <div className="mt-4 max-w-lg">
-                <ContinueStrip meta={saveMeta} onResume={onResume} onDeleteSave={onDeleteSave} busy={resumeBusy} />
-              </div>
-            )}
-
+            {online}
+            {resume}
+            <ModeSelect duo={duo} onDuo={onDuo} />
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <Btn onClick={onStart} tone="cyan" className="text-base">
                 <span className="flex items-center gap-2">
-                  <Play className="h-4 w-4 fill-current" /> SOLO
+                  <Play className="h-4 w-4 fill-current" /> JOUER
                 </span>
               </Btn>
-              {onMultiplayer && (
-                <Btn onClick={onMultiplayer} tone="magenta" className="text-base">
-                  <span className="flex items-center gap-2">
-                    <Users className="h-4 w-4" /> MULTIJOUEUR
-                  </span>
-                </Btn>
-              )}
               <span className="flex items-center gap-2 font-cond text-[11px] font-extrabold tracking-[0.2em] text-moss">
                 <kbd className="panel px-2 py-1 text-cyan-hot">ESPACE</kbd> POUR LANCER
               </span>
@@ -508,20 +520,14 @@ function DesktopStart({ onStart, onMultiplayer, onProgression, cloudStatus, save
                 </span>
               )}
               <MuteBtn muted={muted} onMute={onMute} />
-              {onProgression && (
-                <button onClick={onProgression} className="panel pointer-events-auto flex h-11 items-center gap-2 px-3 transition hover:border-cyan-hot active:translate-y-0.5">
-                  {cloudStatus === "guest" || cloudStatus === "account" ? <Cloud className="h-4 w-4 text-lime-hot" /> : <CloudOff className="h-4 w-4 text-gold" />}
-                  <span className="font-cond text-[11px] font-extrabold tracking-[0.18em] text-chalk">PROGRESSION</span>
-                </button>
-              )}
             </div>
 
             <div className="mt-5 grid max-w-lg gap-2 sm:grid-cols-3">
               <Tips
                 rows={[
                   { icon: Target, t: "PEINS LE COURT", d: "la couverture verse un bonus à la fin de chaque vague." },
-                  { icon: Zap, t: "COMBO", d: "garde la chaîne d'éliminations sous 3,4 s." },
-                  { icon: Crosshair, t: "BONUS RAMASSABLES", d: "bouclier, ricochet, bille explosive, rouleau, overclock, triple jet." },
+                  { icon: Zap, t: "COMBO x7", d: "garde la chaîne d'éliminations sous 3,4 s." },
+                  { icon: Crosshair, t: "3 MUNITIONS", d: "overclock, triple jet, dash à i-frames." },
                 ]}
               />
             </div>
@@ -555,14 +561,11 @@ function DesktopStart({ onStart, onMultiplayer, onProgression, cloudStatus, save
 }
 
 interface StartProps {
+  duo: boolean;
+  resume?: React.ReactNode;
+  online?: React.ReactNode;
+  onDuo: (v: boolean) => void;
   onStart: () => void;
-  onMultiplayer?: () => void;
-  onProgression?: () => void;
-  cloudStatus?: string;
-  saveMeta?: { wave: number; score: number; savedAt: number; label: string } | null;
-  onResume?: () => void;
-  onDeleteSave?: () => void;
-  resumeBusy?: boolean;
   rows: ScoreRow[];
   best: number;
   muted: boolean;
@@ -585,6 +588,7 @@ export function PauseScreen({
   onResume,
   onRestart,
   onMenu,
+  onSaveQuit,
   wave,
   score,
   isTouch,
@@ -592,12 +596,11 @@ export function PauseScreen({
   vibe,
   onMute,
   onVibe,
-  onSaveQuit,
-  saveBusy,
 }: {
   onResume: () => void;
   onRestart: () => void;
   onMenu: () => void;
+  onSaveQuit: () => void;
   wave: number;
   score: number;
   isTouch: boolean;
@@ -605,8 +608,6 @@ export function PauseScreen({
   vibe: boolean;
   onMute: () => void;
   onVibe: () => void;
-  onSaveQuit?: () => void;
-  saveBusy?: boolean;
 }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-court-900/72 px-3 backdrop-blur-[3px]">
@@ -627,11 +628,15 @@ export function PauseScreen({
             <button onClick={onResume} className="btn flex w-full items-center justify-center gap-2 bg-cyan-hot py-3.5 text-base text-court-900">
               <Play className="h-5 w-5 fill-current" /> REPRENDRE
             </button>
-            {onSaveQuit && (
-              <button onClick={onSaveQuit} disabled={saveBusy} className="btn flex w-full items-center justify-center gap-2 bg-gold py-3 text-sm text-court-900 disabled:opacity-50">
-                <Save className="h-4 w-4" /> {saveBusy ? "SAUVEGARDE…" : "SAUVEGARDER ET QUITTER"}
-              </button>
-            )}
+            <button
+              onClick={onSaveQuit}
+              className="btn flex w-full items-center justify-center gap-2 bg-lime-hot py-2.5 text-[13px] text-court-900"
+            >
+              <Save className="h-4 w-4" /> SAUVEGARDER &amp; QUITTER
+            </button>
+            <p className="text-center font-cond text-[10px] font-bold tracking-[0.16em] text-moss">
+              TOUT EST CONSERVÉ : SCORE, VAGUE, PEINTURE DU COURT. TU REPRENDRAS ICI.
+            </p>
             <div className="flex gap-2">
               <button onClick={onRestart} className="btn flex flex-1 items-center justify-center gap-2 bg-magenta-hot py-3 text-sm text-court-900">
                 <RotateCcw className="h-4 w-4" /> REPRENDRE À ZÉRO
@@ -670,8 +675,6 @@ export function GameOverScreen({
   isTouch,
   muted,
   onMute,
-  cloudStatus,
-  onProgression,
 }: {
   result: RunResult;
   rows: ScoreRow[];
@@ -682,8 +685,6 @@ export function GameOverScreen({
   isTouch: boolean;
   muted: boolean;
   onMute: () => void;
-  cloudStatus?: string;
-  onProgression?: () => void;
 }) {
   const [name, setName] = useState("ACE");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -717,23 +718,10 @@ export function GameOverScreen({
                 </div>
               </div>
             </div>
-            {onProgression && (
-              <button onClick={onProgression} className="panel mt-3 flex w-full items-center gap-2 px-3 py-2 text-left transition hover:border-cyan-hot active:translate-y-0.5">
-                {cloudStatus === "guest" || cloudStatus === "account" ? (
-                  <Cloud className="h-4 w-4 shrink-0 text-lime-hot" />
-                ) : (
-                  <CloudOff className="h-4 w-4 shrink-0 text-gold" />
-                )}
-                <span className="font-cond text-[11px] font-extrabold tracking-[0.16em] text-chalk">
-                  {cloudStatus === "guest" || cloudStatus === "account"
-                    ? "PARTIE ENVOYÉE AU CLOUD · VOIR MA PROGRESSION"
-                    : "SAUVEGARDE LOCALE · ACTIVER LE CLOUD"}
-                </span>
-              </button>
-            )}
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
               <Stat label="WAVE" value={String(result.wave)} />
-              <Stat label="SPLATS" value={String(result.kills)} />
+              <Stat label={result.duo ? "SPLATS P1" : "SPLATS"} value={String(result.kills)} />
+              {result.duo && <Stat label="SPLATS P2" value={String(result.kills2)} />}
               <Stat label="KILL CHAIN" value={String(result.maxCombo)} sub="best streak" />
               <Stat label="ACCURACY" value={acc + "%"} sub={`${result.hits}/${result.shots}`} />
               <Stat label="COURT PAINT" value={Math.round(result.coverage * 100) + "%"} />

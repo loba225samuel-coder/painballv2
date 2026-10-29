@@ -1,5 +1,7 @@
 import type { HudState } from "@/game/engine";
 import {
+  Shield as ShieldIcon,
+  Flame,
   Timer,
   Users,
   VolumeX,
@@ -9,25 +11,7 @@ import {
   Vibrate,
   Maximize,
   Smartphone,
-  Save,
-  Check,
-  Loader2,
-  Shield,
-  CornerUpRight,
-  Bomb,
-  PaintRoller,
-  Zap,
-  Crosshair,
 } from "lucide-react";
-
-const POWER_ICONS: Record<string, typeof Shield> = {
-  rapid: Zap,
-  triple: Crosshair,
-  shield: Shield,
-  ricochet: CornerUpRight,
-  explosive: Bomb,
-  roller: PaintRoller,
-};
 
 interface Props {
   hud: HudState;
@@ -39,13 +23,32 @@ interface Props {
   onMute: () => void;
   onVibe: () => void;
   onFullscreen: () => void;
-  onSave: () => void;
-  saveBusy?: boolean;
-  justSaved?: boolean;
 }
 
 const tap =
   "panel flex items-center justify-center transition active:translate-y-0.5 hover:border-cyan-hot/70";
+
+function P2Bar({ p2 }: { p2: { hp: number; maxHp: number; ammo: number; mag: number; dead: boolean } }) {
+  return (
+    <div className={"panel flex items-center gap-2 px-2.5 py-1.5 " + (p2.dead ? "opacity-60" : "border-lime-hot/50")}>
+      <span className="font-cond text-[10px] font-extrabold tracking-[0.18em] text-lime-hot">P2</span>
+      <div className="flex gap-1">
+        {Array.from({ length: p2.maxHp }).map((_, i) => (
+          <span
+            key={i}
+            className={
+              "block h-4 w-2.5 skew-x-[-12deg] border " +
+              (i < p2.hp ? "border-lime-hot/60 bg-lime-hot shadow-[0_0_8px_rgba(185,255,51,0.45)]" : "border-line bg-court-600/70")
+            }
+          />
+        ))}
+      </div>
+      <span className="font-num text-[11px] font-extrabold tracking-wider text-chalk/80">
+        {p2.dead ? "HORS JEU" : p2.ammo + "/" + p2.mag}
+      </span>
+    </div>
+  );
+}
 
 export default function Hud({
   hud,
@@ -57,9 +60,6 @@ export default function Hud({
   onMute,
   onVibe,
   onFullscreen,
-  onSave,
-  saveBusy,
-  justSaved,
 }: Props) {
   const hearts = Array.from({ length: hud.maxHp });
   const cov = Math.round(hud.coverage * 100);
@@ -69,6 +69,7 @@ export default function Hud({
       {/* ---------- barre haute ---------- */}
       <div className="pad-hud-t pad-hud-l pad-hud-r flex items-start justify-between gap-2 sm:gap-4">
         <div className="flex flex-col gap-1.5">
+          {hud.p2 && <P2Bar p2={hud.p2} />}
           <div className="flex items-center gap-1.5">
             <div className="panel flex items-center gap-2 px-2.5 py-1.5">
               <PaintBucket className={"text-cyan-hot " + (isTouch ? "h-5 w-5" : "h-4 w-4")} />
@@ -90,6 +91,17 @@ export default function Hud({
                 })}
               </div>
             </div>
+            {hud.shield > 0 && (
+              <div className="flex items-center gap-1 self-start border-l border-line pl-2">
+                <ShieldIcon className="h-3.5 w-3.5 text-[#7ef4ff]" />
+                {Array.from({ length: hud.shield }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="block h-4 w-2.5 skew-x-[-12deg] border border-[#7ef4ff]/60 bg-[#7ef4ff] shadow-[0_0_10px_rgba(126,244,255,0.55)]"
+                  />
+                ))}
+              </div>
+            )}
             {isTouch && (
               <div className="panel flex items-center gap-1.5 px-2 py-1.5">
                 <Users className="h-4 w-4 text-magenta-hot" />
@@ -129,21 +141,18 @@ export default function Hud({
                 </span>
               </div>
             )}
-            {hud.powers.slice(0, 6).map((pw) => {
-              const Icon = POWER_ICONS[pw.id] ?? Zap;
-              return (
-                <div key={pw.id} className="panel anim-pop flex items-center gap-1 px-2 py-0.5" style={{ borderColor: pw.color + "99" }} title={pw.name}>
-                  <Icon className="h-3.5 w-3.5" style={{ color: pw.color }} />
-                  <span className="font-cond text-[10px] font-extrabold tracking-widest" style={{ color: pw.color }}>
-                    {pw.name}
-                    {pw.charges ? ` ×${pw.charges}` : ""}
-                  </span>
-                  <span className="relative block h-1 w-7 overflow-hidden rounded-full bg-court-600">
-                    <span className="absolute inset-y-0 left-0 transition-[width] duration-75" style={{ width: `${Math.max(0, Math.min(1, pw.pct)) * 100}%`, background: pw.color }} />
-                  </span>
-                </div>
-              );
-            })}
+            {hud.powerName && (
+              <div className="panel anim-pop flex items-center gap-1 border-gold/70 px-2 py-0.5">
+                <Flame className="h-3.5 w-3.5 text-gold" />
+                <span className="font-cond text-[11px] font-extrabold tracking-widest text-gold">{hud.powerName}</span>
+                <span className="relative block h-1 w-8 overflow-hidden rounded-full bg-court-600">
+                  <span
+                    className="absolute inset-y-0 left-0 bg-gold transition-[width] duration-75"
+                    style={{ width: `${hud.powerPct * 100}%` }}
+                  />
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -175,22 +184,6 @@ export default function Hud({
             )}
           </div>
           <div className="pointer-events-auto flex flex-col gap-1.5">
-            <button
-              onClick={onSave}
-              disabled={saveBusy}
-              title="Sauvegarder la partie (Ctrl+S)"
-              aria-label="Sauvegarder la partie"
-              className={tap + (isTouch ? " h-11 w-11" : " h-9 gap-1 px-2") + (justSaved ? " border-lime-hot/80" : "")}
-            >
-              {saveBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin text-cyan-hot" />
-              ) : justSaved ? (
-                <Check className="h-4 w-4 text-lime-hot" />
-              ) : (
-                <Save className="h-4 w-4 text-gold" />
-              )}
-              {!isTouch && <span className="font-cond text-[10px] font-extrabold tracking-[0.16em] text-chalk/85">{justSaved ? "OK" : "SAUVER"}</span>}
-            </button>
             <button onClick={onPause} aria-label="Pause" className={tap + (isTouch ? " h-12 w-12" : " h-9 w-9")}>
               <Pause className={isTouch ? "h-5 w-5 text-chalk" : "h-4 w-4 text-chalk/80"} />
             </button>

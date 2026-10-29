@@ -29,36 +29,38 @@
   --sa-l: env(safe-area-inset-left, 0px);
 }
 
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
+/* Racine : AUCUNE hauteur déclarée (height: 100% / 100dvh) — avec top/bottom à 0,
+   une hauteur rend la boîte « sur-contrainte » : bottom est ignoré et la hauteur
+   reste figée sur l'ancienne mesure. Au basculement portrait/paysage, le canvas
+   ne suivait plus -> bande noire sur le côté. Les insets seuls font la taille. */
+html {
   margin: 0;
   background: #070d0b;
-  overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
-#root {
+body {
   position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  margin: 0;
   overflow: hidden;
+  background: #070d0b;
+  overscroll-behavior: none;
+  font-family: var(--font-body);
+  color: var(--color-chalk);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
 }
 
-/* sur mobile, la page est figée : ni élastique, ni barre d'URL qui bouge */
+#root {
+  position: absolute;
+  inset: 0;
+}
+
 @media (hover: none) and (pointer: coarse) {
-  html,
-  body,
-  #root {
-    position: fixed;
-    inset: 0;
-    height: 100%;
-    overflow: hidden;
-  }
   .btn {
     min-height: 46px;
     font-size: 15px;
@@ -66,47 +68,6 @@ body,
   .panel {
     box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(233, 245, 238, 0.06);
   }
-}
-
-.pad-hud-t {
-  padding-top: calc(0.6rem + var(--sa-t));
-}
-.pad-hud-b {
-  padding-bottom: calc(0.6rem + var(--sa-b));
-}
-.pad-hud-l {
-  padding-left: calc(0.6rem + var(--sa-l));
-}
-.pad-hud-r {
-  padding-right: calc(0.6rem + var(--sa-r));
-}
-
-/* les écrans de menu gardent de l'air, tout en fuyant l'encoche */
-.pad-menu-t {
-  padding-top: max(1.75rem, calc(1.25rem + var(--sa-t)));
-}
-.pad-menu-b {
-  padding-bottom: max(1.75rem, calc(1.25rem + var(--sa-b)));
-}
-
-canvas {
-  -webkit-touch-callout: none;
-}
-
-@supports (height: 100dvh) {
-  #root {
-    height: 100dvh;
-  }
-}
-
-body {
-  font-family: var(--font-body);
-  color: var(--color-chalk);
-  -webkit-tap-highlight-color: transparent;
-  -webkit-user-select: none;
-  user-select: none;
-  touch-action: none;
-  overflow: hidden;
 }
 
 canvas {
@@ -272,4 +233,27 @@ canvas {
 /* l'input du tableau des scores : jamais de zoom automatique sur iOS */
 input {
   font-size: 16px;
+}
+
+/* ---------------------------------------------------------------
+   Insets d'encoche / barre d'accueil (supprimés par erreur lors de
+   la réécriture du bloc racine, rétablis ici).
+   --------------------------------------------------------------- */
+.pad-hud-t {
+  padding-top: calc(0.6rem + var(--sa-t));
+}
+.pad-hud-b {
+  padding-bottom: calc(0.6rem + var(--sa-b));
+}
+.pad-hud-l {
+  padding-left: calc(0.6rem + var(--sa-l));
+}
+.pad-hud-r {
+  padding-right: calc(0.6rem + var(--sa-r));
+}
+.pad-menu-t {
+  padding-top: max(1.75rem, calc(1.25rem + var(--sa-t)));
+}
+.pad-menu-b {
+  padding-bottom: max(1.75rem, calc(1.25rem + var(--sa-b)));
 }
