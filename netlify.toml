@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# PAINTBALL 2D — configuration Netlify (https://app.netlify.com)
+# Un seul fichier suffit : Netlify le détecte automatiquement à l'import.
+# ---------------------------------------------------------------------------
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Vite 7 requiert Node >= 20.19 ; on reste sur le LTS courant de Netlify.
+  NODE_VERSION = "22"
+  NPM_FLAGS = "--no-audit --no-fund"
+  # Sortie unique (vite-plugin-singlefile) : pas besoin de cache long pour les chunks.
+  GENERATE_SOURCEMAP = "false"
+  # À renseigner dans Netlify → Site configuration → Environment variables :
+  # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (clé publishable),
+  # VITE_MULTIPLAYER_URL (wss://… pour les salons en ligne).
+
+# --- Développement local avec la CLI Netlify ------------------------------
+[dev]
+  command = "npm run dev"
+  targetPort = 5173
+  frameworkDependent = true
+
+# --- SPA : tout revient sur le bundle unique ------------------------------
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# --- En-têtes --------------------------------------------------------------
+# Le bundle est inliné dans index.html : on ne met jamais le HTML en cache
+# (déploiement instantané), et tout le reste (polices Google, assets éventuels)
+# est mis en cache agressivement via une empreinte dans le nom de fichier.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+    Cross-Origin-Opener-Policy = "same-origin"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# icône d'installation : nom fixe, mais contenu quasi immuable
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# le manifeste doit suivre les déploiements (orientation, fullscreen, nom)
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Content-Type = "application/manifest+json"
