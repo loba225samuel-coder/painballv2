@@ -1,0 +1,58 @@
+name: Déploiement Netlify
+
+# Chaque push sur main publie la prod ; chaque PR obtient un aperçu jetable.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: netlify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installation
+        run: npm ci
+
+      - name: Vérification des types
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      # artefact de secours : le dist/ complet, téléchargeable depuis l'onglet Actions
+      - name: Archive du build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+
+      - name: Déploiement Netlify
+        uses: nwtgck/actions-netlify@v3.0
+        with:
+          publish-dir: "./dist"
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "${{ github.event.head_commit.message || 'Déploiement Actions' }}"
+          enable-pull-request-comment: true
+          overwrites-pull-request-comment: true
+          alias-deployment: ${{ github.event_name == 'pull_request' }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
