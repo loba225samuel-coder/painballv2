@@ -1,0 +1,32 @@
+# --- build / dist ---
+dist/
+dist-ssr/
+*.local
+
+# --- deps ---
+node_modules/
+.pnp
+.pnp.js
+
+# --- netlify ---
+.netlify/
+
+# --- logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- editors / OS ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
