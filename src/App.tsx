@@ -478,7 +478,7 @@ export default function App() {
           {status === "paused" && (
             <PauseScreen onResume={() => soloRef.current?.resume()} onRestart={() => void startSolo()} onMenu={() => soloRef.current?.toMenu()}
               wave={hud.wave} score={hud.score} isTouch={isTouch} muted={muted} vibe={vibe} onMute={toggleMute} onVibe={toggleVibe}
-              onSaveQuit={() => void saveAndQuit()} saveBusy={prog.saveBusy} />
+              onSaveQuit={() => void saveAndQuit()} saveBusy={prog.saveBusy} onFullscreen={() => void toggleFullscreen()} />
           )}
           {status === "gameover" && result && (
             <GameOverScreen result={result} rows={rows} savedRank={rank} onSave={handleSave} onRestart={() => void startSolo()}

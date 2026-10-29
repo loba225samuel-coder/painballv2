@@ -281,3 +281,41 @@ canvas {
 input {
   font-size: 16px;
 }
+
+/* Compacte l'interface des téléphones en paysage sans réduire la zone tactile. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 560px) {
+  .pad-hud-t {
+    padding-top: calc(0.2rem + var(--sa-t));
+  }
+  .pad-hud-l {
+    padding-left: calc(0.35rem + var(--sa-l));
+  }
+  .pad-hud-r {
+    padding-right: calc(0.35rem + var(--sa-r));
+  }
+  .panel {
+    border-width: 1px;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(233, 245, 238, 0.05);
+  }
+  .compact-touch-button {
+    min-width: 32px;
+    min-height: 32px;
+    border-width: 1px;
+    box-shadow: 0 2px 0 #05100d;
+  }
+  .pause-overlay {
+    padding-top: 4px;
+    padding-bottom: 4px;
+    overflow-y: auto;
+  }
+  .pause-panel {
+    max-height: calc(100% - 8px);
+    overflow-y: auto;
+  }
+  .pause-panel > div:nth-child(2) {
+    padding: 0.65rem;
+  }
+  .pause-panel .mt-4 {
+    margin-top: 0.5rem;
+  }
+}

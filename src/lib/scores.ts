@@ -14,7 +14,8 @@ export const MAX_NAME_LENGTH = 16;
 
 export function cleanName(raw: unknown, fallback = "JOUEUR"): string {
   const s = String(raw ?? "")
-    .replace(/[^\p{L}\p{N} _-]/gu, "")
+    .replace(/[^\p{L}\p{N} ._-]/gu, "")
+    .replace(/\s{2,}/g, " ")
     .trim()
     .slice(0, MAX_NAME_LENGTH);
   return s || fallback;

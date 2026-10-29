@@ -87,7 +87,7 @@ export function comboMult(streak: number) {
 
 /* ---------------- Bonus ramassables ---------------- */
 
-export type BonusKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type BonusKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 export const BONUS: Record<BonusKind, { id: string; name: string; short: string; color: string; duration: number }> = {
   0: { id: "rapid", name: "OVERCLOCK", short: "OVERCLOCK", color: COL.player, duration: 5 },
@@ -101,7 +101,14 @@ export const BONUS: Record<BonusKind, { id: string; name: string; short: string;
   8: { id: "cluster", name: "GRAPPE", short: "GRAPPE", color: "#e9f5ee", duration: 0 },
   9: { id: "ink", name: "ENCRE LENTE", short: "ENCRE", color: COL.sniper, duration: 8 },
   10: { id: "magnet", name: "AIMANT", short: "AIMANT", color: COL.lime, duration: 10 },
+  11: { id: "prime", name: "PRIME", short: "PRIME", color: COL.boss, duration: 0 },
+  12: { id: "dash", name: "DASH RECHARGÉ", short: "DASH +", color: "#55ddff", duration: 0 },
+  13: { id: "comboFreeze", name: "COMBO GELÉ", short: "GEL COMBO", color: "#b8e6ff", duration: 5 },
 };
+
+/** Paramètres des bonus « PRIME / DASH+ / GEL » (solo uniquement). */
+export const PRIME_PER_WAVE = 250;
+export const COMBO_FREEZE_DURATION = 5;
 
 /** Table de drop. Les bonus rares n'y figurent qu'une fois. */
 export const DROP_TABLE: BonusKind[] = [
@@ -109,6 +116,9 @@ export const DROP_TABLE: BonusKind[] = [
   0, 1, 4, 6, 3, 7, // courants
   8, 9, 10, // rares
 ];
+
+/** Table solo : y ajoute les bonus réservés au solo (PRIME, DASH+, COMBO GELÉ). */
+export const SOLO_DROP_TABLE: BonusKind[] = [...DROP_TABLE, 11, 12, 13];
 
 /** Paramètres des nouveaux bonus (partagés solo / multi). */
 export const TURBO_SPEED = 1.35;

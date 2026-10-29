@@ -52,14 +52,14 @@ Le mode solo est une survie en vagues.
 - **Score** : les éliminations rapportent des points.
 - **Combo** : enchaîner les splats augmente le multiplicateur.
 - **Couverture de peinture** : chaque impact tache le sol ; la couverture verse un bonus en fin de vague.
-- **Bonus ramassables** : 11 capsules — soin, overclock, triple jet, bouclier, ricochet, bille explosive, rouleau, turbo, grappe, encre lente, aimant.
+- **Bonus ramassables** : 14 capsules — soin, overclock, triple jet, bouclier, ricochet, bille explosive, rouleau, turbo, grappe, encre lente, aimant (les 4 derniers aussi en ligne) + PRIME, dash rechargé, combo gelé (solo).
 - **Dash** : esquive rapide avec courte invulnérabilité.
 - **Chargeur limité** : rechargement manuel ou automatique à zéro.
 - **États complets** : accueil, partie, pause, game over, redémarrage rapide, classement local.
 
 ### 2.2 Bonus ramassables
 
-Les capsules apparaissent après les éliminations. La table de drop est partagée entre solo et multijoueur (17 entrées : les rares n'y figurent qu'une fois).
+Les capsules apparaissent après les éliminations. **14 bonus au total.** La table de drop (`DROP_TABLE`, 17 entrées) est partagée entre solo et multijoueur ; les bonus récents du solo (**PRIME, Dash rechargé, Combo gelé**) n'y sont ajoutés que par `SOLO_DROP_TABLE`, pour ne pas perturber l'équilibre en ligne. Les plus rares n'y figurent qu'une fois.
 
 | Bonus | Effet | Durée / charges |
 | --- | --- | --- |
@@ -74,6 +74,9 @@ Les capsules apparaissent après les éliminations. La table de drop est partag�
 | **Grappe** | Tir en éventail : 5 billes serrées, courte portée. | 1 charge, max 2 |
 | **Encre lente** | Chaque impact ralentit l'ennemi / l'adversaire de 45 % (anneau violet). | 8 s / effet 2 s |
 | **Aimant** | Les capsules situées dans un rayon de 300 px viennent vers le joueur. | 10 s |
+| **PRIME** | Verse immédiatement 250 × vague de points. | instantané |
+| **Dash rechargé** | Remet le dash à 0 et offre une charge gratuite. | 1 charge |
+| **Combo gelé** | Le timer du combo cesse de descendre. | 5 s |
 
 Les bonus actifs sont lisibles dans le HUD : icône, nom, durée restante, charges.  
 En multijoueur, ils apparaissent aussi sur les cartes joueurs.

@@ -24,7 +24,6 @@ import {
   Save,
   History,
   Trash2,
-  Lock,
 } from "lucide-react";
 import type { RunResult } from "@/game/engine";
 import { cleanName, fmtTime, MAX_NAME_LENGTH, type ScoreRow } from "@/lib/scores";
@@ -442,11 +441,18 @@ function MobileStart({
             <button
               onClick={onMultiplayer}
               disabled={!multiplayerEnabled}
-              title={multiplayerEnabled ? "Ouvrir le multijoueur" : "Multijoueur bientôt disponible"}
-              className={`btn flex w-full items-center justify-center gap-3 bg-magenta-hot py-3.5 text-base text-court-900 ${!multiplayerEnabled ? "cursor-not-allowed opacity-60 hover:translate-y-0 hover:brightness-100" : ""}`}
+              title={multiplayerEnabled ? "Ouvrir le multijoueur" : "Le mode multijoueur arrive bientôt"}
+              className={
+                multiplayerEnabled
+                  ? "btn flex w-full items-center justify-center gap-3 bg-magenta-hot py-3.5 text-base text-court-900"
+                  : "btn flex w-full cursor-not-allowed items-center justify-center gap-3 border-line bg-court-600/70 py-3.5 text-base text-moss opacity-80"
+              }
             >
-              {multiplayerEnabled ? <Users className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
-              {multiplayerEnabled ? "MULTIJOUEUR · COOP / VERSUS" : "MULTIJOUEUR · BIENTÔT DISPONIBLE"}
+              <Users className="h-5 w-5" />
+              MULTIJOUEUR
+              {!multiplayerEnabled && (
+                <span className="slash bg-gold px-2 py-[2px] font-display text-[10px] text-court-900">BIENTÔT</span>
+              )}
             </button>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -509,23 +515,21 @@ function DesktopStart({ onStart, onMultiplayer, multiplayerEnabled = false, onPr
                 </span>
               </Btn>
               {onMultiplayer && (
-                <Btn
+                <button
                   onClick={onMultiplayer}
-                  tone="magenta"
-                  className="text-base"
                   disabled={!multiplayerEnabled}
-                  title={multiplayerEnabled ? "Ouvrir le multijoueur" : "Multijoueur bientôt disponible"}
+                  title={multiplayerEnabled ? "Ouvrir le multijoueur" : "Le mode multijoueur arrive bientôt"}
+                  className={
+                    multiplayerEnabled
+                      ? "btn flex items-center gap-2 bg-magenta-hot px-5 py-3 text-base text-court-900"
+                      : "btn flex cursor-not-allowed items-center gap-2 border-line bg-court-600/70 px-5 py-3 text-base text-moss opacity-80"
+                  }
                 >
-                  <span className="flex items-center gap-2">
-                    {multiplayerEnabled ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                    MULTIJOUEUR
-                    {!multiplayerEnabled && (
-                      <span className="border border-court-900/50 px-1.5 py-[1px] font-cond text-[10px] font-extrabold tracking-[0.18em]">
-                        BIENTÔT
-                      </span>
-                    )}
-                  </span>
-                </Btn>
+                  <Users className="h-4 w-4" /> MULTIJOUEUR
+                  {!multiplayerEnabled && (
+                    <span className="slash bg-gold px-2 py-[2px] font-display text-[10px] text-court-900">BIENTÔT</span>
+                  )}
+                </button>
               )}
               <span className="flex items-center gap-2 font-cond text-[11px] font-extrabold tracking-[0.2em] text-moss">
                 <kbd className="panel px-2 py-1 text-cyan-hot">ESPACE</kbd> POUR LANCER
@@ -549,7 +553,7 @@ function DesktopStart({ onStart, onMultiplayer, multiplayerEnabled = false, onPr
                 rows={[
                   { icon: Target, t: "PEINS LE COURT", d: "la couverture verse un bonus à la fin de chaque vague." },
                   { icon: Zap, t: "COMBO", d: "garde la chaîne d'éliminations sous 3,4 s." },
-                  { icon: Crosshair, t: "11 BONUS", d: "bouclier, ricochet, explosif, rouleau, turbo, grappe, encre, aimant, triple, overclock, soin." },
+                  { icon: Crosshair, t: "14 BONUS", d: "bouclier, explosif, turbo, grappe, encre, aimant, PRIME, dash+, combo gelé, triple, overclock, soin…" },
                 ]}
               />
             </div>
@@ -623,6 +627,7 @@ export function PauseScreen({
   onVibe,
   onSaveQuit,
   saveBusy,
+  onFullscreen,
 }: {
   onResume: () => void;
   onRestart: () => void;
@@ -636,10 +641,11 @@ export function PauseScreen({
   onVibe: () => void;
   onSaveQuit?: () => void;
   saveBusy?: boolean;
+  onFullscreen?: () => void;
 }) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-court-900/72 px-3 backdrop-blur-[3px]">
-      <div className={"panel anim-pop w-full " + (isTouch ? "max-w-[430px]" : "max-w-[420px]")}>
+    <div className="pause-overlay absolute inset-0 flex items-center justify-center bg-court-900/72 px-3 backdrop-blur-[3px]">
+      <div className={"pause-panel panel anim-pop w-full " + (isTouch ? "max-w-[430px]" : "max-w-[420px]")}>
         <div className="stripes h-1.5 w-full opacity-80" />
         <div className={isTouch ? "p-4" : "p-5"}>
           <div className="flex items-center gap-2">
@@ -671,9 +677,10 @@ export function PauseScreen({
             </div>
           </div>
           {isTouch ? (
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <MuteBtn muted={muted} onMute={onMute} />
               <Toggle on={vibe} onClick={onVibe} label="VIBRATION" icon={Vibrate} />
+              {onFullscreen && <Toggle on={false} onClick={onFullscreen} label="PLEIN ÉCRAN" icon={Maximize} tint="text-gold" />}
             </div>
           ) : (
             <p className="mt-3 text-center font-cond text-[10px] font-bold tracking-[0.2em] text-moss">
@@ -821,12 +828,15 @@ export function GameOverScreen({
 
         <div className="anim-in flex flex-col gap-4" style={{ animationDelay: "0.06s" }}>
           <div className="panel p-4">
-            <h3 className="font-display text-[13px] tracking-wide text-chalk">SIGNE LE TABLEAU</h3>
+            <h3 className="font-display text-[13px] tracking-wide text-chalk">ENREGISTRER TA PARTIE</h3>
+            <p className="mt-1 font-cond text-[11px] font-bold leading-snug tracking-wide text-moss">
+              TON NOM SERA COLLÉ À TON SCORE, À TON CLASSEMENT ET À TA PROGRESSION.
+            </p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
               <input
                 ref={inputRef}
                 value={name}
-                onChange={(e) => setName(e.target.value.replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, MAX_NAME_LENGTH))}
+                onChange={(e) => setName(e.target.value.replace(/[^\p{L}\p{N} ._-]/gu, "").replace(/\s{2,}/g, " ").slice(0, MAX_NAME_LENGTH))}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") submitScore();
                 }}

@@ -4,6 +4,8 @@ import {
   CircleDotDashed,
   Snowflake,
   Magnet,
+  FastForward,
+  DollarSign,
   Timer,
   Users,
   VolumeX,
@@ -36,6 +38,9 @@ const POWER_ICONS: Record<string, typeof Shield> = {
   ink: Snowflake,
   magnet: Magnet,
   slow: Snowflake,
+  prime: DollarSign,
+  dash: FastForward,
+  comboFreeze: Snowflake,
 };
 
 interface Props {
@@ -72,15 +77,18 @@ export default function Hud({
 }: Props) {
   const hearts = Array.from({ length: hud.maxHp });
   const cov = Math.round(hud.coverage * 100);
+  // Paysage court : peu de hauteur verticale → interface resserrée
+  const viewportHeight = typeof window !== "undefined" ? (window.visualViewport?.height ?? window.innerHeight) : 0;
+  const compactLandscape = isTouch && !portrait && viewportHeight < 560;
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
       {/* ---------- barre haute ---------- */}
-      <div className="pad-hud-t pad-hud-l pad-hud-r flex flex-wrap items-start justify-between gap-x-2 gap-y-1.5 sm:gap-x-4">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5">
-            <div className="panel flex items-center gap-2 px-2.5 py-1.5">
-              <PaintBucket className={"text-cyan-hot " + (isTouch ? "h-4 w-4" : "h-4 w-4")} />
+      <div className={"pad-hud-t pad-hud-l pad-hud-r flex flex-wrap items-start justify-between " + (compactLandscape ? "gap-1" : "gap-x-2 gap-y-1.5 sm:gap-x-4")}>
+        <div className={"flex min-w-0 flex-col " + (compactLandscape ? "gap-1" : "gap-1.5")}>
+          <div className={"flex items-center " + (compactLandscape ? "gap-1" : "gap-1.5")}>
+            <div className={"panel flex items-center " + (compactLandscape ? "gap-1 px-1.5 py-1" : "gap-2 px-2.5 py-1.5")}>
+              <PaintBucket className={"shrink-0 text-cyan-hot " + (compactLandscape ? "h-3.5 w-3.5" : "h-4 w-4")} />
               <div className="flex gap-1">
                 {hearts.map((_, i) => {
                   const full = i < hud.hp;
@@ -89,7 +97,7 @@ export default function Hud({
                       key={i}
                       className={
                         "skew-x-[-12deg] border transition-all duration-150 " +
-                        (isTouch ? "h-4 w-2 " : "h-4 w-2.5 ") +
+                        (compactLandscape ? "h-3.5 w-2 " : isTouch ? "h-4 w-2 " : "h-4 w-2.5 ") +
                         (full
                           ? "border-cyan-hot/60 bg-cyan-hot shadow-[0_0_10px_rgba(62,232,255,0.55)]"
                           : "border-line bg-court-600/70")
@@ -100,16 +108,16 @@ export default function Hud({
               </div>
             </div>
             {isTouch && (
-              <div className="panel flex items-center gap-1 px-1.5 py-1">
-                <Users className="h-3.5 w-3.5 text-magenta-hot" />
-                <span className="font-num text-sm font-extrabold leading-none text-chalk">{hud.enemies}</span>
+              <div className={"panel flex items-center " + (compactLandscape ? "gap-1 px-1 py-1" : "gap-1 px-1.5 py-1")}>
+                <Users className="h-3.5 w-3.5 shrink-0 text-magenta-hot" />
+                <span className={"font-num font-extrabold leading-none text-chalk " + (compactLandscape ? "text-xs" : "text-sm")}>{hud.enemies}</span>
               </div>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <div className={"slash bg-lime-hot " + (isTouch ? "px-2 py-[3px]" : "px-2.5 py-0.5")}>
-              <span className={"font-display leading-tight tracking-wide text-court-900 " + (isTouch ? "text-[13px]" : "text-[13px]")}>
+            <div className={"slash bg-lime-hot " + (compactLandscape ? "px-2 py-0.5" : isTouch ? "px-2 py-[3px]" : "px-2.5 py-0.5")}>
+              <span className={"font-display leading-tight tracking-wide text-court-900 " + (compactLandscape ? "text-[11px]" : "text-[13px]")}>
                 VAGUE {hud.wave || 1}
               </span>
             </div>
@@ -122,13 +130,13 @@ export default function Hud({
               </div>
             )}
             <div className="panel flex items-center gap-1.5 px-1.5 py-1">
-              <span className={"relative block overflow-hidden rounded-sm bg-court-600 " + (isTouch ? "h-1 w-12" : "h-1.5 w-14 sm:w-24")}>
+              <span className={"relative block overflow-hidden rounded-sm bg-court-600 " + (compactLandscape ? "h-1 w-10" : isTouch ? "h-1 w-12" : "h-1.5 w-14 sm:w-24")}>
                 <span
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-hot to-lime-hot transition-[width] duration-200"
                   style={{ width: `${Math.min(100, cov)}%` }}
                 />
               </span>
-              <span className="font-num text-[11px] font-extrabold leading-none text-chalk/80">{cov}%</span>
+              <span className={"font-num font-extrabold leading-none text-chalk/80 " + (compactLandscape ? "text-[9px]" : "text-[11px]")}>{cov}%</span>
             </div>
             {!isTouch && (
               <div className="panel hidden items-center gap-1 px-2 py-1 sm:flex">
@@ -141,13 +149,23 @@ export default function Hud({
             {hud.powers.slice(0, 6).map((pw) => {
               const Icon = POWER_ICONS[pw.id] ?? Zap;
               return (
-                <div key={pw.id} className="panel anim-pop flex items-center gap-1 px-2 py-0.5" style={{ borderColor: pw.color + "99" }} title={pw.name}>
-                  <Icon className="h-3.5 w-3.5" style={{ color: pw.color }} />
-                  <span className="font-cond text-[10px] font-extrabold tracking-widest" style={{ color: pw.color }}>
-                    {pw.name}
-                    {pw.charges ? ` ×${pw.charges}` : ""}
-                  </span>
-                  <span className="relative block h-1 w-7 overflow-hidden rounded-full bg-court-600">
+                <div
+                  key={pw.id}
+                  className={"panel anim-pop flex items-center " + (compactLandscape ? "gap-0.5 px-1 py-0.5" : "gap-1 px-2 py-0.5")}
+                  style={{ borderColor: pw.color + "99" }}
+                  title={pw.name}
+                >
+                  <Icon className={compactLandscape ? "h-3 w-3 shrink-0" : "h-3.5 w-3.5"} style={{ color: pw.color }} />
+                  {!compactLandscape && (
+                    <span className="font-cond text-[10px] font-extrabold tracking-widest" style={{ color: pw.color }}>
+                      {pw.name}
+                      {pw.charges ? ` ×${pw.charges}` : ""}
+                    </span>
+                  )}
+                  {compactLandscape && typeof pw.charges === "number" && pw.charges > 0 && (
+                    <span className="font-num text-[8px] font-extrabold" style={{ color: pw.color }}>×{pw.charges}</span>
+                  )}
+                  <span className={"relative block overflow-hidden rounded-full bg-court-600 " + (compactLandscape ? "h-0.5 w-3" : "h-1 w-7")}>
                     <span className="absolute inset-y-0 left-0 transition-[width] duration-75" style={{ width: `${Math.max(0, Math.min(1, pw.pct)) * 100}%`, background: pw.color }} />
                   </span>
                 </div>
@@ -157,13 +175,13 @@ export default function Hud({
         </div>
 
         {/* score + boutons système */}
-        <div className={"flex flex-col items-end gap-1.5 " + (isTouch ? "max-w-[62vw]" : "")}>
+        <div className={"flex flex-col items-end " + (compactLandscape ? "gap-0.5" : "gap-1.5") + (isTouch ? " max-w-[62vw]" : "")}>
           <div className={"text-right " + (portrait ? "max-w-[46vw]" : "")}>
-            <div className="font-cond text-[10px] font-extrabold tracking-[0.28em] text-moss">SCORE</div>
+            <div className={"font-cond font-extrabold tracking-[0.2em] text-moss " + (compactLandscape ? "text-[8px]" : "text-[10px] tracking-[0.28em]")}>SCORE</div>
             <div
               className={
                 "font-display leading-none text-chalk tabular-nums " +
-                (isTouch ? "text-[22px] " : "text-2xl sm:text-4xl ")
+                (compactLandscape ? "text-[18px] " : isTouch ? "text-[22px] " : "text-2xl sm:text-4xl ")
               }
               style={{ textShadow: "0 3px 0 rgba(5,16,13,0.9), 0 0 24px rgba(62,232,255,0.35)" }}
             >
@@ -183,13 +201,13 @@ export default function Hud({
               </div>
             )}
           </div>
-          <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
+          <div className={"pointer-events-auto flex flex-wrap justify-end " + (compactLandscape ? "gap-1" : "gap-1.5")}>
             <button
               onClick={onSave}
               disabled={saveBusy}
               title="Sauvegarder la partie (Ctrl+S)"
               aria-label="Sauvegarder la partie"
-              className={tap + (isTouch ? " h-10 w-10" : " h-9 gap-1 px-2") + (justSaved ? " border-lime-hot/80" : "")}
+              className={tap + (compactLandscape ? " compact-touch-button h-9 w-9" : isTouch ? " h-10 w-10" : " h-9 gap-1 px-2") + (justSaved ? " border-lime-hot/80" : "")}
             >
               {saveBusy ? (
                 <Loader2 className={isTouch ? "h-4 w-4 animate-spin text-cyan-hot" : "h-4 w-4 animate-spin text-cyan-hot"} />
@@ -200,7 +218,7 @@ export default function Hud({
               )}
               {!isTouch && <span className="font-cond text-[10px] font-extrabold tracking-[0.16em] text-chalk/85">{justSaved ? "OK" : "SAUVER"}</span>}
             </button>
-            <button onClick={onPause} aria-label="Pause" className={tap + (isTouch ? " h-10 w-10" : " h-9 w-9")}>
+            <button onClick={onPause} aria-label="Pause" className={tap + (compactLandscape ? " compact-touch-button h-9 w-9" : isTouch ? " h-10 w-10" : " h-9 w-9")}>
               <Pause className={isTouch ? "h-4 w-4 text-chalk" : "h-4 w-4 text-chalk/80"} />
             </button>
             <button onClick={onMute} aria-label="Son" className={tap + (isTouch ? " h-9 w-9" : " h-9 w-9")}>
@@ -211,12 +229,12 @@ export default function Hud({
               )}
             </button>
             {isTouch && (
-              <button onClick={onVibe} aria-label="Vibration" className={tap + (isTouch ? " h-10 w-10" : " h-9 w-9")}>
+              <button onClick={onVibe} aria-label="Vibration" className={tap + (compactLandscape ? " compact-touch-button h-9 w-9" : isTouch ? " h-10 w-10" : " h-9 w-9")}>
                 <Vibrate className={"h-4 w-4 " + (vibe ? "text-lime-hot" : "text-moss")} />
               </button>
             )}
             {isTouch && !portrait && (
-              <button onClick={onFullscreen} aria-label="Plein écran" className={tap + (isTouch ? " h-10 w-10" : " h-9 w-9")}>
+              <button onClick={onFullscreen} aria-label="Plein écran" className={tap + (compactLandscape ? " compact-touch-button h-9 w-9" : isTouch ? " h-10 w-10" : " h-9 w-9")}>
                 <Maximize className="h-4 w-4 text-gold" />
               </button>
             )}

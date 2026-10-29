@@ -213,7 +213,9 @@ export function useProgression() {
   /** Écrit le pseudo sans jamais dépendre d'une ligne profil déjà présente. */
   const pushName = useCallback(
     async (raw: string) => {
-      const clean = cleanName(raw);
+      const clean = cleanName(raw, "");
+      // champ vidé : on garde le nom connu plutôt que de basculer sur « JOUEUR »
+      if (!clean) return profile?.display_name || localPlayerName();
       localStorage.setItem("pb.name", clean);
       if (!userId) return clean;
       setProfile((p) => (p ? { ...p, display_name: clean, settings: { ...p.settings, name: clean } } : p));
