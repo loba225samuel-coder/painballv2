@@ -18,7 +18,7 @@ export function loadScores(): ScoreRow[] {
     return parsed
       .filter((r) => r && typeof r.score === "number")
       .map((r) => ({
-        name: String(r.name ?? "AAA").slice(0, 3).toUpperCase(),
+        name: String(r.name ?? "ACE").slice(0, 16),
         score: Math.floor(r.score),
         wave: Math.floor(r.wave ?? 0),
         kills: Math.floor(r.kills ?? 0),

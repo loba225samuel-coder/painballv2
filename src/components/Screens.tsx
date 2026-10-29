@@ -125,7 +125,7 @@ export function Leaderboard({ rows, highlight }: { rows: ScoreRow[]; highlight?:
                 }
               >
                 <td className="px-3 py-[3px] font-num">{i + 1}</td>
-                <td className="py-[3px] tracking-[0.14em]">{r.name}</td>
+                <td className="py-[3px] tracking-[0.12em]"><span className="inline-block max-w-[14ch] truncate align-bottom">{r.name}</span></td>
                 <td className="py-[3px] text-right font-num">{r.score.toLocaleString()}</td>
                 <td className="py-[3px] text-right font-num text-moss">{r.wave}</td>
                 <td className="py-[3px] pr-3 text-right font-num text-moss">{Math.round(r.coverage * 100)}%</td>
@@ -428,9 +428,14 @@ function MobileStart({
             SOLO
           </button>
           {onMultiplayer && (
-            <button onClick={onMultiplayer} className="btn flex w-full items-center justify-center gap-3 bg-magenta-hot py-3.5 text-base text-court-900">
+            <button
+              disabled
+              title="Le mode multijoueur arrive bientot"
+              className="btn flex w-full cursor-not-allowed items-center justify-center gap-3 border-line bg-court-600/70 py-3.5 text-base text-moss opacity-80"
+            >
               <Users className="h-5 w-5" />
-              MULTIJOUEUR · COOP / VERSUS
+              MULTIJOUEUR
+              <span className="slash bg-gold px-2 py-[2px] font-display text-[10px] text-court-900">BIENTÔT</span>
             </button>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -493,11 +498,14 @@ function DesktopStart({ onStart, onMultiplayer, onProgression, cloudStatus, save
                 </span>
               </Btn>
               {onMultiplayer && (
-                <Btn onClick={onMultiplayer} tone="magenta" className="text-base">
-                  <span className="flex items-center gap-2">
-                    <Users className="h-4 w-4" /> MULTIJOUEUR
-                  </span>
-                </Btn>
+                <button
+                  disabled
+                  title="Le mode multijoueur arrive bientot"
+                  className="btn flex cursor-not-allowed items-center gap-2 border-line bg-court-600/70 px-5 py-3 text-base text-moss opacity-80"
+                >
+                  <Users className="h-4 w-4" /> MULTIJOUEUR
+                  <span className="slash bg-gold px-2 py-[2px] font-display text-[10px] text-court-900">BIENTÔT</span>
+                </button>
               )}
               <span className="flex items-center gap-2 font-cond text-[11px] font-extrabold tracking-[0.2em] text-moss">
                 <kbd className="panel px-2 py-1 text-cyan-hot">ESPACE</kbd> POUR LANCER
@@ -660,6 +668,13 @@ export function PauseScreen({
 
 /* ---------------- game over ---------------- */
 
+/** Nom de joueur : lettres (accents compris), chiffres, espace, - _ . — 16 caractères. */
+const cleanName = (v: string) =>
+  v
+    .replace(/[^\p{L}\p{N} ._-]/gu, "")
+    .replace(/\s{2,}/g, " ")
+    .slice(0, 16);
+
 export function GameOverScreen({
   result,
   rows,
@@ -685,7 +700,7 @@ export function GameOverScreen({
   cloudStatus?: string;
   onProgression?: () => void;
 }) {
-  const [name, setName] = useState("ACE");
+  const [name, setName] = useState(() => (localStorage.getItem("pb.name") || "").slice(0, 16));
   const inputRef = useRef<HTMLInputElement>(null);
   const acc = result.shots > 0 ? Math.round((result.hits / result.shots) * 100) : 0;
   const isRecord = rows.length === 0 || result.score >= rows[0].score;
@@ -778,44 +793,62 @@ export function GameOverScreen({
 
         <div className="anim-in flex flex-col gap-4" style={{ animationDelay: "0.06s" }}>
           <div className="panel p-4">
-            <h3 className="font-display text-[13px] tracking-wide text-chalk">SIGN THE SCOREBOARD</h3>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                ref={inputRef}
-                value={name}
-                onChange={(e) => setName(e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") onSave(name || "ACE");
-                }}
-                spellCheck={false}
-                autoComplete="off"
-                autoCorrect="off"
-                inputMode="text"
-                aria-label="Trois lettres"
-                className="w-32 border-2 border-line bg-court-700 px-3 py-2 text-center font-display text-2xl tracking-[0.3em] text-cyan-hot outline-none transition focus:border-cyan-hot focus:shadow-[0_0_0_3px_rgba(62,232,255,0.16)]"
-              />
-              <Btn onClick={() => onSave(name || "ACE")} tone={savedRank === null ? "gold" : "ghost"} className="flex-1">
+            <h3 className="font-display text-[13px] tracking-wide text-chalk">ENREGISTRER TA PARTIE</h3>
+            <p className="mt-1 font-cond text-[11px] font-bold leading-snug tracking-wide text-moss">
+              TON NOM SERA COLLÉ À TON SCORE, À TON CLASSEMENT ET À TA PROGRESSION.
+            </p>
+            <label
+              htmlFor="run-name"
+              className="mt-3 block font-cond text-[10px] font-extrabold tracking-[0.22em] text-moss"
+            >
+              TON NOM
+            </label>
+            <input
+              id="run-name"
+              ref={inputRef}
+              value={name}
+              onChange={(e) => setName(cleanName(e.target.value))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && name.trim()) onSave(name.trim());
+              }}
+              placeholder="SAMUEL"
+              maxLength={16}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              inputMode="text"
+              aria-label="Ton nom, 16 caracteres maximum"
+              className="mt-1 w-full border-2 border-line bg-court-700 px-3 py-2.5 font-display text-lg tracking-[0.12em] text-cyan-hot outline-none transition placeholder:text-moss/50 focus:border-cyan-hot focus:shadow-[0_0_0_3px_rgba(62,232,255,0.16)]"
+            />
+            <div className="mt-2 flex items-center gap-3">
+              <span className="font-num font-cond text-[11px] font-extrabold tracking-[0.16em] text-moss">
+                {name.trim().length}/16
+              </span>
+              <Btn
+                onClick={() => onSave(name.trim() || "ACE")}
+                tone={savedRank === null ? "gold" : "ghost"}
+                className="flex-1"
+              >
                 <span className="flex items-center justify-center gap-2">
-                  <Trophy className="h-4 w-4" /> {savedRank === null ? "SAVE RUN" : "SAVED"}
+                  <Trophy className="h-4 w-4" /> {savedRank === null ? "ENREGISTRER LE SCORE" : "SCORE ENREGISTRÉ"}
                 </span>
               </Btn>
             </div>
-            {savedRank !== null && (
+            {savedRank !== null ? (
               <p className="mt-2 font-cond text-[11px] font-extrabold tracking-[0.18em] text-lime-hot">
                 {savedRank < 0
-                  ? "RUN LOGGED — OUTSIDE THE TOP 8"
+                  ? "PARTIE ENREGISTRÉE — HORS DU TOP 8"
                   : savedRank === 0
-                    ? "TOP OF THE COURT — RANK #1"
-                    : `LOCKED IN — RANK #${savedRank + 1}`}
+                    ? "EN TÊTE DU TABLEAU — RANG #1"
+                    : `ENREGISTRÉ — RANG #${savedRank + 1}`}
               </p>
-            )}
-            {savedRank === null && (
-              <p className="mt-2 font-cond text-[11px] font-bold tracking-[0.14em] text-moss">
-                THREE LETTERS. STORED LOCALLY ON THIS DEVICE.
+            ) : (
+              <p className="mt-2 font-cond text-[11px] font-bold leading-snug tracking-[0.14em] text-moss">
+                1 À 16 CARACTÈRES · ENTRÉE POUR VALIDER · MÉMORISÉ SUR CET APPAREIL
               </p>
             )}
           </div>
-          <Leaderboard rows={rows} highlight={savedRank !== null && savedRank >= 0 ? savedRank : undefined} />
+          <Leaderboard rows={rows} />
         </div>
       </div>
     </div>
