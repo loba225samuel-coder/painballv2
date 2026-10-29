@@ -61,7 +61,7 @@
 
 # le manifeste doit suivre les déploiements (orientation, fullscreen, nom)
 [[headers]]
-  for = "/manifest.json"
+  for = "/manifest.webmanifest"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
     Content-Type = "application/manifest+json"

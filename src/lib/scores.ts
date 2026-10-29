@@ -9,19 +9,6 @@ export interface ScoreRow {
 
 const KEY = "pb2d.scores.v1";
 
-/** Même longueur que le pseudo cloud Supabase (profiles.display_name). */
-export const MAX_NAME_LENGTH = 16;
-
-export function cleanName(raw: unknown, fallback = "JOUEUR"): string {
-  const s = String(raw ?? "")
-    .replace(/[^\p{L}\p{N} _-]/gu, "")
-    .trim()
-    .slice(0, MAX_NAME_LENGTH);
-  return s || fallback;
-}
-
-const clamp01 = (v: unknown) => Math.max(0, Math.min(1, Number(v) || 0));
-
 export function loadScores(): ScoreRow[] {
   try {
     const raw = localStorage.getItem(KEY);
@@ -31,11 +18,11 @@ export function loadScores(): ScoreRow[] {
     return parsed
       .filter((r) => r && typeof r.score === "number")
       .map((r) => ({
-        name: cleanName(r.name, "JOUEUR"),
+        name: String(r.name ?? "ACE").slice(0, 16),
         score: Math.floor(r.score),
         wave: Math.floor(r.wave ?? 0),
         kills: Math.floor(r.kills ?? 0),
-        coverage: clamp01(r.coverage),
+        coverage: Math.floor(r.coverage ?? 0),
         date: Number(r.date ?? 0),
       }))
       .sort((a, b) => b.score - a.score)
@@ -46,22 +33,13 @@ export function loadScores(): ScoreRow[] {
 }
 
 export function saveScore(row: ScoreRow): { rows: ScoreRow[]; rank: number } {
-  const entry: ScoreRow = {
-    ...row,
-    name: cleanName(row.name),
-    score: Math.max(0, Math.floor(row.score)),
-    wave: Math.max(0, Math.floor(row.wave)),
-    kills: Math.max(0, Math.floor(row.kills)),
-    coverage: clamp01(row.coverage),
-    date: row.date || Date.now(),
-  };
-  const rows = [...loadScores(), entry].sort((a, b) => b.score - a.score).slice(0, 8);
+  const rows = [...loadScores(), row].sort((a, b) => b.score - a.score).slice(0, 8);
   try {
     localStorage.setItem(KEY, JSON.stringify(rows));
   } catch {
     /* storage may be unavailable */
   }
-  const rank = rows.findIndex((r) => r.date === entry.date && r.score === entry.score && r.name === entry.name) + 1;
+  const rank = rows.findIndex((r) => r === row) + 1;
   return { rows, rank };
 }
 

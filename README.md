@@ -52,14 +52,16 @@ Le mode solo est une survie en vagues.
 - **Score** : les éliminations rapportent des points.
 - **Combo** : enchaîner les splats augmente le multiplicateur.
 - **Couverture de peinture** : chaque impact tache le sol ; la couverture verse un bonus en fin de vague.
-- **Bonus ramassables** : 11 capsules — soin, overclock, triple jet, bouclier, ricochet, bille explosive, rouleau, turbo, grappe, encre lente, aimant.
+- **Bonus ramassables** : soin, overclock, triple jet, bouclier, ricochet, bille explosive, rouleau, prime,
+  dash rechargé et combo gelé.
 - **Dash** : esquive rapide avec courte invulnérabilité.
 - **Chargeur limité** : rechargement manuel ou automatique à zéro.
 - **États complets** : accueil, partie, pause, game over, redémarrage rapide, classement local.
 
 ### 2.2 Bonus ramassables
 
-Les capsules apparaissent après les éliminations. La table de drop est partagée entre solo et multijoueur (17 entrées : les rares n'y figurent qu'une fois).
+Les capsules apparaissent après les éliminations. Les trois derniers bonus sont réservés au solo ; la table
+du multijoueur reste inchangée.
 
 | Bonus | Effet | Durée / charges |
 | --- | --- | --- |
@@ -70,10 +72,9 @@ Les capsules apparaissent après les éliminations. La table de drop est partag�
 | **Ricochet** | Les projectiles rebondissent une fois sur les bunkers. | 8 s |
 | **Bille explosive** | Le prochain tir explose en zone, endommage les groupes et peint largement. | 1 charge, max 2 |
 | **Rouleau de peinture** | Le joueur peint le sol en se déplaçant. | 6 s |
-| **Turbo** | Vitesse ×1,35, traînée orange derrière le joueur. | 8 s |
-| **Grappe** | Tir en éventail : 5 billes serrées, courte portée. | 1 charge, max 2 |
-| **Encre lente** | Chaque impact ralentit l'ennemi / l'adversaire de 45 % (anneau violet). | 8 s / effet 2 s |
-| **Aimant** | Les capsules situées dans un rayon de 300 px viennent vers le joueur. | 10 s |
+| **Prime** | Ajoute `250 × vague` points au score. | instantané |
+| **Dash rechargé** | Recharge le dash et ajoute un dash gratuit en réserve. | instantané |
+| **Combo gelé** | Le délai du combo ne diminue plus. | 5 s |
 
 Les bonus actifs sont lisibles dans le HUD : icône, nom, durée restante, charges.  
 En multijoueur, ils apparaissent aussi sur les cartes joueurs.
@@ -101,16 +102,10 @@ Conception mobile :
 - **Haptique** : dash, impact, élimination, boss ; coupable dans le HUD.
 - **Wake lock** : l’écran ne s’éteint pas pendant une partie.
 - **Budget FX mobile** : particules plafonnées, DPR adapté, pas de scanlines.
-- **Barre haute compacte** : icônes 16 px, cibles tactiles 40 px, score 22 px, boutons système en **rangée horizontale** dans le coin haut-droit (jamais une colonne sur toute la hauteur, qui coupait le dernier bouton).
-- **Contrôles proportionnés à la hauteur d’écran** : rayon des sticks calculé sur le plus petit côté (40–56 px) — sur un écran paysage de 456 px de haut, le stick passe de 148 à 92 px de diamètre.
-- **Zones réservées** : bas du HUD (88 px) jamais occupé par un stick, sticks placés entre le HUD et le cluster de boutons, étiquettes **au-dessus** des pastilles et plafonnées à 12 px.
 
 ### 2.4 Multijoueur
 
-> **État actuel : temporairement désactivé dans l’interface.**  
-> Le bouton est visible mais marqué **« Bientôt disponible »**. Le code du multijoueur est conservé pour une réactivation prochaine.
-
-Depuis l’accueil, **MULTIJOUEUR** ouvrira un écran dédié.
+Depuis l’accueil, **MULTIJOUEUR** ouvre un écran dédié.
 
 | Mode | Principe |
 | --- | --- |
@@ -127,7 +122,7 @@ Le serveur en ligne est **autoritaire** : il valide les déplacements, tirs, dé
 
 Le jeu propose une carrière persistante :
 
-- pseudo complet (jusqu’à 16 caractères) et couleur de peinture ;
+- pseudo et couleur de peinture ;
 - grade : **RECRUE → SPRAYEUR → VÉTÉRAN → LÉGENDE** ;
 - record, score cumulé, meilleure vague ;
 - éliminations, tirs, précision, couverture max, temps de jeu ;
@@ -420,7 +415,6 @@ Le serveur peut aussi tourner sur Fly.io, un VPS, ou n’importe quel hébergeur
 2. Exécuter :
    - `supabase/migrations/202610280001_progression.sql`
    - `supabase/migrations/202610280002_saved_runs.sql`
-   - `supabase/migrations/202610280003_profile_names.sql`
 3. Activer **Anonymous Sign-Ins** dans Authentication.
 4. Configurer `Site URL` et les Redirect URLs.
 5. Ajouter les variables Supabase dans Netlify.
@@ -508,7 +502,53 @@ Les vérifications réseau et moteur ont été faites avec des scénarios headle
 
 ---
 
-## 11. Pistes d’évolution
+## 11. Chiffres du jeu et commandes
+
+### Les valeurs exactes
+
+| Élément | Valeur |
+| --- | --- |
+| Vie | 6 peintures · 1,15 s d'invulnérabilité après un éclat |
+| Chargeur | 12 billes · recharge 0,95 s (manuelle ou auto à zéro) |
+| Cadence | 0,108 s par tir · 0,062 s en OVERCLOCK |
+| Dash | 0,17 s de propulsion · 1,05 s de recharge · 0,34 s d'invulnérabilité |
+| Combo | x1 → x7, seuils à 2 / 4 / 7 / 11 / 16 / 22 splats enchaînés · fenêtre 3,4 s |
+| Bonus de vague | 220 × vague + couverture de peinture × 1 400, et +1 PV |
+| Adversaires | GRAUNT 60 PV / 120 pts · RUSHER 48 PV / 170 pts · SNIPER 52 PV / 220 pts · BOSS 420 PV / 1 600 pts |
+| Vagues | 3 + 1,7 × n adversaires · boss toutes les 5 vagues |
+| Drops | 24 % à la mort d'un adversaire · 100 % premium sur un boss |
+| Ramassages | OVERCLOCK (5 s) · TRIPLE STREAM (9 s) · +PAINT (2 PV) · BOUCLIER (2 éclats) · RICOCHET (3 rebonds, 12 s) · BILLE EXPLOSIVE (zone, 9 s) · ROULEAU (instantané) |
+
+### Les commandes
+
+| Clavier | Action | Tactile |
+| --- | --- | --- |
+| `W A S D` / flèches | Se déplacer | Glisser sur la moitié gauche |
+| Souris | Viser | Glisser sur la moitié droite (tir automatique) |
+| `Clic` / `Espace` | Arroser | — |
+| `Maj` | Dash + invulnérabilité | Pad **DASH** |
+| `R` | Recharger | Pad **CHARGE** |
+| `P` / `Échap` | Pause | Bouton pause |
+| `M` / `V` / `F` | Son / vibration / plein écran | Boutons dédiés |
+
+En **duo local**, le pilote 2 joue aux flèches, tire avec `Entrée`, dash avec `Maj droit` et recharge avec `.`.
+
+### Ce que stocke la base
+
+Les migrations [`supabase/migrations/`](./supabase/migrations) créent notamment :
+
+| `player_stats` | — |
+| `profiles` | — |
+| `runs` | — |
+| `saved_runs` | — |
+
+Les écritures passent par des fonctions SQL (une partie terminée dépose la ligne **et** met à jour la
+progression en une seule requête), et les politiques **RLS** garantissent que chacun n'écrit que ses
+propres lignes — les classements restent publics, un score déposé ne peut plus être modifié.
+
+---
+
+## 12. Pistes d’évolution
 
 Quelques suites naturelles :
 
@@ -525,7 +565,7 @@ Quelques suites naturelles :
 
 ---
 
-## 12. Auteur
+## 13. Auteur
 
 Projet développé par **loba225samuel-coder**.  
 Dépôt : <https://github.com/loba225samuel-coder/painballv2>

@@ -67,8 +67,8 @@ export default function Progression({ open, onClose, prog, onResume, onDeleteSav
   }, [open, tab, prog.loadLeaderboard]);
 
   useEffect(() => {
-    setName(prog.displayName);
-  }, [prog.displayName, open]);
+    setName(prog.profile?.display_name ?? localStorage.getItem("pb.name") ?? "");
+  }, [prog.profile?.display_name, open]);
 
   if (!open) return null;
 
@@ -127,18 +127,12 @@ export default function Progression({ open, onClose, prog, onResume, onDeleteSav
               <label className="mt-4 block font-cond text-[10px] font-extrabold tracking-[0.22em] text-moss">PSEUDO</label>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value.replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 16))}
+                onChange={(e) => setName(e.target.value.slice(0, 16))}
                 onBlur={() => void prog.rename(name)}
                 onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                maxLength={16}
                 placeholder="JOUEUR"
-                aria-label="Pseudo du joueur"
                 className="mt-1 w-full border-2 border-line bg-court-700 px-3 py-2 font-display text-lg tracking-wider text-chalk outline-none focus:border-cyan-hot"
               />
-              <div className="mt-1 flex items-center justify-between font-cond text-[10px] font-bold tracking-[0.14em] text-moss">
-                <span>Nom complet, pas seulement 3 lettres</span>
-                <span className="font-num">{name.length}/16</span>
-              </div>
 
               <div className="mt-3 flex items-center gap-2">
                 <span className="font-cond text-[10px] font-extrabold tracking-[0.22em] text-moss">PEINTURE</span>

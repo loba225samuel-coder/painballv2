@@ -272,7 +272,6 @@ export class MultiplayerGame {
     let dt = this.last ? now - this.last : DT;
     this.last = now;
     if (dt > 1 / 15) dt = 1 / 15;
-    if (!(dt > 0)) dt = 1 / 60;
     this.time += dt;
     this.onPad();
 
@@ -563,7 +562,7 @@ export class MultiplayerGame {
     if (this.stickAim.id === e.pointerId) { this.stickAim.active = false; this.stickAim.id = -1; this.stickAim.dx = this.stickAim.dy = 0; this.stickAim.mag = 0; }
   };
   private get stickR() {
-    return Math.round(clamp(Math.min(this.cssW, this.cssH) * 0.1, 40, 56));
+    return clamp(this.cssW * 0.06, 50, 72);
   }
 
   private autoAim(p: MpPlayer, s: SimState) {
@@ -842,11 +841,6 @@ export class MultiplayerGame {
     if (p.ricochetT > 0) powers.push({ id: "ricochet", name: "RICOCHET", pct: p.ricochetT / 8, color: COL.sniper });
     if (p.explosive > 0) powers.push({ id: "explosive", name: "EXPLOSIF", pct: 1, color: COL.rusher, charges: p.explosive });
     if (p.rollerT > 0) powers.push({ id: "roller", name: "ROULEAU", pct: p.rollerT / 6, color: COL.lime });
-    if (p.turboT > 0) powers.push({ id: "turbo", name: "TURBO", pct: p.turboT / 8, color: "#ff4a3d" });
-    if (p.cluster > 0) powers.push({ id: "cluster", name: "GRAPPE", pct: 1, color: "#e9f5ee", charges: p.cluster });
-    if (p.inkT > 0) powers.push({ id: "ink", name: "ENCRE", pct: p.inkT / 8, color: "#a86bff" });
-    if (p.magnetT > 0) powers.push({ id: "magnet", name: "AIMANT", pct: p.magnetT / 10, color: COL.lime });
-    if (p.slowT > 0) powers.push({ id: "slow", name: "RALENTI", pct: p.slowT / 2, color: "#a86bff" });
     return {
       id: p.id,
       name: p.name,
@@ -931,9 +925,9 @@ export class MultiplayerGame {
     // pas de transition sous le cover : sinon une bande noire apparaît à la rotation
     this.camZoom = cover * (this.isTouch ? 1.1 : 1);
     const b = this.btn;
-    b.fire.r = Math.round(clamp(Math.min(Math.min(cssW, cssH) * 0.09, cssH * 0.13), 30, 46));
-    b.fire.x = cssW - b.fire.r - 14 - this.safe.r;
-    b.fire.y = cssH - b.fire.r - 14 - this.safe.b;
+    b.fire.r = clamp(Math.min(cssW, cssH) * 0.1, 38, 56);
+    b.fire.x = cssW - b.fire.r - 16 - this.safe.r;
+    b.fire.y = cssH - b.fire.r - 18 - this.safe.b;
     b.dash.r = b.fire.r * 0.78;
     b.dash.x = b.fire.x - b.fire.r - b.dash.r - 8;
     b.dash.y = b.fire.y - b.fire.r * 0.42;
@@ -1304,28 +1298,9 @@ export class MultiplayerGame {
     } else if (kind === 5) {
       ctx.beginPath(); ctx.arc(0, 2, 5, 0, TAU); ctx.fill();
       ctx.beginPath(); ctx.moveTo(2, -3); ctx.quadraticCurveTo(5, -7, 7, -5); ctx.stroke();
-    } else if (kind === 6) {
+    } else {
       ctx.fillRect(-7, -5, 10, 6);
       ctx.beginPath(); ctx.moveTo(3, -2); ctx.lineTo(7, -2); ctx.lineTo(7, 5); ctx.stroke();
-    } else if (kind === 7) {
-      ctx.beginPath();
-      ctx.moveTo(-5, -7); ctx.lineTo(2.5, -1); ctx.lineTo(-1.5, -1); ctx.lineTo(5, 7); ctx.lineTo(-3, 2); ctx.lineTo(1, 2);
-      ctx.closePath(); ctx.fill();
-    } else if (kind === 8) {
-      for (const [dx, dy] of [[-6, 4], [-1, 4.6], [4, 3.4], [-3.5, -3], [3, -4]]) {
-        ctx.beginPath(); ctx.arc(dx, dy, 2.4, 0, TAU); ctx.fill();
-      }
-    } else if (kind === 9) {
-      ctx.beginPath();
-      ctx.moveTo(0, -7); ctx.quadraticCurveTo(6.5, 0.5, 0, 5.5); ctx.quadraticCurveTo(-6.5, 0.5, 0, -7);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "rgba(11,18,16,0.6)";
-      ctx.beginPath(); ctx.arc(-1.6, 1.6, 1.8, 0, TAU); ctx.fill();
-    } else if (kind === 10) {
-      ctx.lineWidth = 3.4;
-      ctx.beginPath(); ctx.arc(0, -1, 5.5, Math.PI, TAU); ctx.stroke();
-      ctx.fillRect(-7.2, -1, 3.4, 6);
-      ctx.fillRect(3.8, -1, 3.4, 6);
     }
     ctx.font = "800 9px 'Barlow Semi Condensed', Barlow, sans-serif";
     ctx.textAlign = "center"; ctx.textBaseline = "top";
@@ -1431,19 +1406,6 @@ export class MultiplayerGame {
     ctx.fillStyle = "#7ef4ff";
     ctx.beginPath(); ctx.ellipse(4.5, 0, 4.6, 6.2, 0, 0, TAU); ctx.fill();
     ctx.restore();
-
-    if (p.slowT > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.8;
-      ctx.strokeStyle = "#a86bff";
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([5, 6]);
-      ctx.beginPath();
-      ctx.arc(x, y, p.r + 9, this.time * 2.4, this.time * 2.4 + TAU * 0.85);
-      ctx.stroke();
-      ctx.restore();
-      ctx.globalAlpha = 1;
-    }
 
     // étiquette + munitions
     ctx.save();

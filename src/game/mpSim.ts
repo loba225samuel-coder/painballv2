@@ -1,31 +1,7 @@
 /* Simulation multijoueur pure : aucune dépendance DOM.
  * Utilisée telle quelle par le duo local ET par le serveur autoritaire. */
 
-import {
-  BONUS,
-  COL,
-  DROP_TABLE,
-  ENEMY_DEF,
-  GRAPPE_DMG,
-  GRAPPE_LIFE,
-  GRAPPE_SHOTS,
-  GRAPPE_SPREAD,
-  INK_DURATION,
-  INK_SLOW_DURATION,
-  INK_SLOW_FACTOR,
-  MAGNET_DURATION,
-  MAGNET_SPEED,
-  MAGNET_RADIUS,
-  PLAYER,
-  TAU,
-  TURBO_DURATION,
-  TURBO_SPEED,
-  WORLD,
-  clamp,
-  comboMult,
-  makeBunkers,
-  sanitizeName,
-} from "./rules";
+import { BONUS, COL, DROP_TABLE, ENEMY_DEF, PLAYER, TAU, WORLD, clamp, comboMult, makeBunkers, sanitizeName } from "./rules";
 import type { BonusKind } from "./rules";
 import type { Bunker, EType } from "./rules";
 
@@ -76,11 +52,6 @@ export interface MpPlayer {
   explosive: number;
   rollerT: number;
   rollerTick: number;
-  turboT: number;
-  magnetT: number;
-  cluster: number;
-  inkT: number;
-  slowT: number;
   down: boolean;
   downT: number;
   revive: number;
@@ -114,7 +85,6 @@ export interface MpEnemy {
   volley: number;
   stormT: number;
   born: number;
-  slowT: number;
 }
 
 export interface MpBullet {
@@ -290,11 +260,6 @@ export function addPlayer(s: SimState, id: string, name: string, token?: string)
     explosive: 0,
     rollerT: 0,
     rollerTick: 0,
-    turboT: 0,
-    magnetT: 0,
-    cluster: 0,
-    inkT: 0,
-    slowT: 0,
     down: false,
     downT: 0,
     revive: 0,
@@ -363,7 +328,6 @@ export function startMatch(s: SimState) {
     p.ammo = p.mag;
     p.reload = p.fireT = p.dashT = p.dashCd = p.invuln = p.tripleT = p.rapidT = 0;
     p.shield = p.shieldT = p.ricochetT = p.explosive = p.rollerT = p.rollerTick = 0;
-    p.turboT = p.magnetT = p.cluster = p.inkT = p.slowT = 0;
     p.down = false;
     p.downT = 0;
     p.revive = 0;
@@ -453,10 +417,9 @@ export function predictMotion(p: MpPlayer, input: MpInput, dt: number, bunkers: 
     p.vx = p.dashX * PLAYER.dashSpeed;
     p.vy = p.dashY * PLAYER.dashSpeed;
   } else {
-    const speed = PLAYER.speed * (p.turboT > 0 ? TURBO_SPEED : 1) * (p.slowT > 0 ? INK_SLOW_FACTOR : 1);
     const mag = Math.hypot(input.mx, input.my);
-    const tx = mag > 0.02 ? (input.mx / Math.max(mag, 1)) * speed : 0;
-    const ty = mag > 0.02 ? (input.my / Math.max(mag, 1)) * speed : 0;
+    const tx = mag > 0.02 ? (input.mx / Math.max(mag, 1)) * PLAYER.speed : 0;
+    const ty = mag > 0.02 ? (input.my / Math.max(mag, 1)) * PLAYER.speed : 0;
     const k = 1 - Math.exp(-(mag > 0.02 ? 16 : 11) * dt);
     p.vx += (tx - p.vx) * k;
     p.vy += (ty - p.vy) * k;
@@ -488,22 +451,20 @@ function fire(s: SimState, p: MpPlayer) {
   if (p.ammo <= 0) return startReload(p);
   p.ammo--;
   p.fireT = p.rapidT > 0 ? PLAYER.rapidFire : PLAYER.fire;
-  const clusterShot = p.cluster > 0;
-  const n = clusterShot ? GRAPPE_SHOTS : p.tripleT > 0 ? 3 : 1;
+  const n = p.tripleT > 0 ? 3 : 1;
   const explosiveShot = p.explosive > 0;
   for (let i = 0; i < n; i++) {
-    const off = clusterShot ? (i / (n - 1) - 0.5) * GRAPPE_SPREAD : n === 1 ? 0 : (i - 1) * 0.13;
-    const a = p.angle + off + rr(s, -0.03, 0.03) * (clusterShot ? 1.6 : 1);
+    const a = p.angle + (n === 1 ? 0 : (i - 1) * 0.13) + rr(s, -0.03, 0.03);
     s.bullets.push({
       id: s.nextId++,
       x: p.x + Math.cos(a) * 20,
       y: p.y + Math.sin(a) * 20,
-      vx: Math.cos(a) * (clusterShot ? 640 : PLAYER.bulletSpeed) + p.vx * 0.22,
-      vy: Math.sin(a) * (clusterShot ? 640 : PLAYER.bulletSpeed) + p.vy * 0.22,
+      vx: Math.cos(a) * PLAYER.bulletSpeed + p.vx * 0.22,
+      vy: Math.sin(a) * PLAYER.bulletSpeed + p.vy * 0.22,
       r: explosiveShot && i === 0 ? 7 : 5,
-      dmg: s.mode === "versus" ? 1 : clusterShot ? GRAPPE_DMG : PLAYER.bulletDmg,
-      life: clusterShot ? GRAPPE_LIFE : 1.25,
-      color: explosiveShot && i === 0 ? COL.rusher : clusterShot ? BONUS[8].color : p.color,
+      dmg: s.mode === "versus" ? 1 : PLAYER.bulletDmg,
+      life: 1.25,
+      color: explosiveShot && i === 0 ? COL.rusher : p.color,
       foe: false,
       owner: p.id,
       bounces: p.ricochetT > 0 ? 1 : 0,
@@ -511,7 +472,6 @@ function fire(s: SimState, p: MpPlayer) {
     });
   }
   p.shots += n;
-  if (clusterShot) p.cluster = Math.max(0, p.cluster - 1);
   if (explosiveShot) p.explosive = Math.max(0, p.explosive - 1);
   p.vx -= Math.cos(p.angle) * 42;
   p.vy -= Math.sin(p.angle) * 42;
@@ -558,10 +518,6 @@ function updatePlayers(s: SimState, dt: number) {
     p.ricochetT = Math.max(0, p.ricochetT - dt);
     p.rollerT = Math.max(0, p.rollerT - dt);
     p.shieldT = Math.max(0, p.shieldT - dt);
-    p.turboT = Math.max(0, p.turboT - dt);
-    p.inkT = Math.max(0, p.inkT - dt);
-    p.magnetT = Math.max(0, p.magnetT - dt);
-    p.slowT = Math.max(0, p.slowT - dt);
     if (p.shieldT <= 0) p.shield = 0;
 
     if (p.down) {
@@ -687,7 +643,6 @@ function makeEnemy(s: SimState, type: EType, x: number, y: number): MpEnemy {
     volley: 0,
     stormT: 4,
     born: 0.35,
-    slowT: 0,
   };
 }
 
@@ -780,11 +735,6 @@ function updateEnemies(s: SimState, dt: number) {
       }
     }
     e.coolT -= dt;
-    if (e.slowT > 0) {
-      e.slowT = Math.max(0, e.slowT - dt);
-      tvx *= INK_SLOW_FACTOR;
-      tvy *= INK_SLOW_FACTOR;
-    }
     const k = 1 - Math.exp(-(e.type === "rusher" ? 7 : 5) * dt);
     e.vx += (tvx - e.vx) * k;
     e.vy += (tvy - e.vy) * k;
@@ -918,7 +868,6 @@ function updateBullets(s: SimState, dt: number) {
         for (const p of s.players) {
           if (p.id !== b.owner && !p.down && Math.hypot(b.x - p.x, b.y - p.y) < p.r + b.r) {
             if (owner) owner.hits++;
-            if (owner && owner.inkT > 0 && p.slowT <= 0) p.slowT = INK_SLOW_DURATION;
             if (b.explosive) { explode(s, b.x, b.y, b.color, owner); b.explosive = false; }
             else hurt(s, p, b.dmg, b.x, b.y, b.color, owner);
             gone = true;
@@ -934,10 +883,6 @@ function updateBullets(s: SimState, dt: number) {
               explode(s, b.x, b.y, b.color, owner);
               b.explosive = false;
             } else {
-              if (owner && owner.inkT > 0 && e.slowT <= 0) {
-                e.slowT = INK_SLOW_DURATION;
-                ev(s, { t: "hit", x: e.x, y: e.y, color: BONUS[9].color });
-              }
               e.hp -= b.dmg;
               e.flash = 1;
               paintAt(s, b.x, b.y, b.color, 34, b.owner);
@@ -965,16 +910,6 @@ function updatePickups(s: SimState, dt: number) {
     q.t -= dt;
     if (q.t <= 0) { s.pickups.splice(i, 1); continue; }
     for (const p of s.players) {
-      if (p.magnetT > 0) {
-        const mx = p.x - q.x;
-        const my = p.y - q.y;
-        const md = Math.hypot(mx, my) || 1;
-        if (md < MAGNET_RADIUS) {
-          const speed = MAGNET_SPEED * (1 - md / MAGNET_RADIUS);
-          q.x = clamp(q.x + (mx / md) * speed * dt, 0, WORLD.w);
-          q.y = clamp(q.y + (my / md) * speed * dt, 0, WORLD.h);
-        }
-      }
       if (p.down || Math.hypot(q.x - p.x, q.y - p.y) >= p.r + 18) continue;
       s.pickups.splice(i, 1);
       p.score += 60;
@@ -987,10 +922,6 @@ function updatePickups(s: SimState, dt: number) {
       else if (q.kind === 4) p.ricochetT = 8;
       else if (q.kind === 5) p.explosive = Math.min(2, p.explosive + 1);
       else if (q.kind === 6) p.rollerT = 6;
-      else if (q.kind === 7) p.turboT = TURBO_DURATION;
-      else if (q.kind === 8) p.cluster = Math.min(2, p.cluster + 1);
-      else if (q.kind === 9) p.inkT = INK_DURATION;
-      else if (q.kind === 10) p.magnetT = MAGNET_DURATION;
       ev(s, { t: "pickup", x: q.x, y: q.y, color: info.color, text: info.short });
       break;
     }

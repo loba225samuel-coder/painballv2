@@ -87,7 +87,7 @@ export function comboMult(streak: number) {
 
 /* ---------------- Bonus ramassables ---------------- */
 
-export type BonusKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type BonusKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export const BONUS: Record<BonusKind, { id: string; name: string; short: string; color: string; duration: number }> = {
   0: { id: "rapid", name: "OVERCLOCK", short: "OVERCLOCK", color: COL.player, duration: 5 },
@@ -97,32 +97,16 @@ export const BONUS: Record<BonusKind, { id: string; name: string; short: string;
   4: { id: "ricochet", name: "RICOCHET", short: "RICOCHET", color: COL.sniper, duration: 8 },
   5: { id: "explosive", name: "BILLE EXPLOSIVE", short: "EXPLOSIF", color: COL.rusher, duration: 0 },
   6: { id: "roller", name: "ROULEAU DE PEINTURE", short: "ROULEAU", color: COL.lime, duration: 6 },
-  7: { id: "turbo", name: "TURBO", short: "TURBO", color: "#ff4a3d", duration: 8 },
-  8: { id: "cluster", name: "GRAPPE", short: "GRAPPE", color: "#e9f5ee", duration: 0 },
-  9: { id: "ink", name: "ENCRE LENTE", short: "ENCRE", color: COL.sniper, duration: 8 },
-  10: { id: "magnet", name: "AIMANT", short: "AIMANT", color: COL.lime, duration: 10 },
+  7: { id: "prime", name: "PRIME", short: "PRIME", color: COL.boss, duration: 0 },
+  8: { id: "dash", name: "DASH RECHARGÉ", short: "DASH +", color: "#55ddff", duration: 0 },
+  9: { id: "comboFreeze", name: "COMBO GELÉ", short: "GEL COMBO", color: "#b8e6ff", duration: 5 },
 };
 
-/** Table de drop. Les bonus rares n'y figurent qu'une fois. */
-export const DROP_TABLE: BonusKind[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, // fréquents
-  0, 1, 4, 6, 3, 7, // courants
-  8, 9, 10, // rares
-];
+/** Table réseau inchangée : ces bonus sont pour le solo uniquement. */
+export const DROP_TABLE: BonusKind[] = [0, 1, 2, 3, 4, 5, 6, 0, 1, 4, 6, 3];
 
-/** Paramètres des nouveaux bonus (partagés solo / multi). */
-export const TURBO_SPEED = 1.35;
-export const TURBO_DURATION = 8;
-export const GRAPPE_SHOTS = 5;
-export const GRAPPE_SPREAD = 0.24;
-export const GRAPPE_DMG = 15;
-export const GRAPPE_LIFE = 0.72;
-export const INK_DURATION = 8;
-export const INK_SLOW_DURATION = 2;
-export const INK_SLOW_FACTOR = 0.55;
-export const MAGNET_DURATION = 10;
-export const MAGNET_RADIUS = 300;
-export const MAGNET_SPEED = 320; // px/s, vitesse max d’attraction
+/** Table solo : les trois bonus récents sont rares et n'écrasent pas les anciens. */
+export const SOLO_DROP_TABLE: BonusKind[] = [...DROP_TABLE, 7, 8, 9];
 
 export function sanitizeName(name: unknown, fallback = "JOUEUR") {
   const s = String(name ?? "")

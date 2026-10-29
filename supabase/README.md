@@ -9,7 +9,6 @@ Ne jamais mettre une clé `sb_secret_…` ou `service_role` dans le client.
 ## Ce que la base sauvegarde
 
 - `profiles` : pseudo, couleur de peinture, réglages (son, vibration), progression légère (tutoriels vus, dernier mode).
-- `set_profile_name(p_name)` : écrit le pseudo du joueur connecté, crée le profil si nécessaire, et ne génère plus de `JOUEUR-****`.
 - `player_stats` : parties jouées, score cumulé, record, meilleure vague, éliminations, tirs, précision, couverture, temps, coop/versus, victoires.
 - `runs` : chaque partie terminée (solo, coop, versus), avec score, vague, stats, durée, victoire et détails.
 - `saved_runs` : une partie **en cours** par joueur/mode, pour sauvegarder à la vague 5 et reprendre plus tard.
@@ -21,7 +20,6 @@ Ne jamais mettre une clé `sb_secret_…` ou `service_role` dans le client.
 1. Ouvrez le projet Supabase → **SQL Editor**.
 2. Collez le contenu de [`migrations/202610280001_progression.sql`](./migrations/202610280001_progression.sql), puis **Run**.
 3. Collez ensuite [`migrations/202610280002_saved_runs.sql`](./migrations/202610280002_saved_runs.sql), puis **Run**.
-4. Collez enfin [`migrations/202610280003_profile_names.sql`](./migrations/202610280003_profile_names.sql), puis **Run**.
 4. **Authentication → Providers** :
    - activez **Anonymous Sign-Ins** (sauvegarde invité en un clic) ;
    - laissez **Email** activé si vous voulez les comptes par lien magique.

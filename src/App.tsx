@@ -6,7 +6,7 @@ import Hud from "@/components/Hud";
 import Multiplayer from "@/components/Multiplayer";
 import Progression from "@/components/Progression";
 import { GameOverScreen, PauseScreen, StartScreen } from "@/components/Screens";
-import { bestScore, cleanName, loadScores, saveScore, type ScoreRow } from "@/lib/scores";
+import { bestScore, loadScores, saveScore, type ScoreRow } from "@/lib/scores";
 import { useProgression } from "@/hooks/useProgression";
 import { Maximize } from "lucide-react";
 
@@ -24,9 +24,6 @@ const EMPTY_MP: MpHud = {
 const SERVER_URL =
   import.meta.env.VITE_MULTIPLAYER_URL ||
   (typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname) ? "ws://localhost:8787" : "");
-
-/** Le multijoueur est conservé dans le code, mais désactivé dans l’interface pour le moment. */
-const MULTIPLAYER_ENABLED = false;
 
 const fsElement = () =>
   (document.fullscreenElement || (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement) ?? null;
@@ -65,7 +62,9 @@ export default function App() {
   const [justSaved, setJustSaved] = useState(false);
   const [resumeBusy, setResumeBusy] = useState(false);
 
-  const [active, setActive] = useState<"solo" | "mp">("solo");
+  const [active, setActive] = useState<"solo" | "mp">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("mode") === "multi" ? "mp" : "solo"
+  );
   const [status, setStatus] = useState<Status>("menu");
   const [hud, setHud] = useState<HudState>(EMPTY_HUD);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -95,7 +94,7 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    if (active === "solo" || !MULTIPLAYER_ENABLED) {
+    if (active === "solo") {
       const game = new PaintballGame(canvas, {
         onHud: setHud,
         onStatus: setStatus,
@@ -277,17 +276,13 @@ export default function App() {
   }, [ensureFullscreen]);
 
   const openMultiplayer = useCallback(async () => {
-    if (!MULTIPLAYER_ENABLED) {
-      say("Multijoueur bientôt disponible");
-      return;
-    }
     setMpResult(null);
     setMpError(null);
     setMpMenuOpen(false);
     setMpHud(EMPTY_MP);
     setActive("mp");
     await ensureFullscreen();
-  }, [ensureFullscreen, say]);
+  }, [ensureFullscreen]);
 
   const backToSolo = useCallback(() => {
     mpRef.current?.leave();
@@ -444,11 +439,12 @@ export default function App() {
 
   const handleSave = useCallback((name: string) => {
     if (rank !== null || !result) return;
-    const finalName = cleanName(name);
-    const out = saveScore({ name: finalName, score: result.score, wave: result.wave, kills: result.kills, coverage: result.coverage, date: Date.now() });
+    const clean = (name || "ACE").trim().slice(0, 16) || "ACE";
+    // le nom saisi devient LE nom du joueur : classement local ET profil Supabase
+    void prog.rename(clean);
+    const out = saveScore({ name: clean, score: result.score, wave: result.wave, kills: result.kills, coverage: result.coverage, date: Date.now() });
     setRows(out.rows);
     setRank(out.rank - 1);
-    void prog.rename(finalName);
   }, [rank, result, prog.rename]);
 
   const best = Math.max(bestScore(rows), prog.cloudBest);
@@ -469,7 +465,7 @@ export default function App() {
               onSave={() => void saveCurrent()} saveBusy={prog.saveBusy} justSaved={justSaved} />
           )}
           {status === "menu" && (
-            <StartScreen onStart={() => void startSolo()} onMultiplayer={() => void openMultiplayer()} multiplayerEnabled={MULTIPLAYER_ENABLED} onProgression={() => setProgressOpen(true)}
+            <StartScreen onStart={() => void startSolo()} onMultiplayer={() => void openMultiplayer()} onProgression={() => setProgressOpen(true)}
               cloudStatus={prog.status} saveMeta={prog.saveMeta} onResume={() => void resumeSaved()} onDeleteSave={() => void deleteSave()} resumeBusy={resumeBusy}
               rows={rows} best={best}
               muted={muted} onMute={toggleMute} isTouch={isTouch} vibe={vibe} onVibe={toggleVibe}
@@ -478,24 +474,24 @@ export default function App() {
           {status === "paused" && (
             <PauseScreen onResume={() => soloRef.current?.resume()} onRestart={() => void startSolo()} onMenu={() => soloRef.current?.toMenu()}
               wave={hud.wave} score={hud.score} isTouch={isTouch} muted={muted} vibe={vibe} onMute={toggleMute} onVibe={toggleVibe}
+          onFullscreen={toggleFullscreen}
               onSaveQuit={() => void saveAndQuit()} saveBusy={prog.saveBusy} />
           )}
           {status === "gameover" && result && (
             <GameOverScreen result={result} rows={rows} savedRank={rank} onSave={handleSave} onRestart={() => void startSolo()}
               onMenu={() => soloRef.current?.toMenu()} isTouch={isTouch} muted={muted} onMute={toggleMute}
-              cloudStatus={prog.status} onProgression={() => setProgressOpen(true)}
-              playerName={prog.displayName} />
+              cloudStatus={prog.status} onProgression={() => setProgressOpen(true)} />
           )}
         </>
       )}
 
-      {MULTIPLAYER_ENABLED && active === "mp" && (
+      {active === "mp" && (
         <Multiplayer
           hud={mpHud}
           result={mpResult}
           error={mpError}
           serverUrl={SERVER_URL}
-          initialName={prog.displayName}
+          initialName={prog.profile?.display_name}
           onNameChange={(n) => void prog.rename(n)}
           muted={muted}
           vibe={vibe}

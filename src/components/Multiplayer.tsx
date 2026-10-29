@@ -31,10 +31,6 @@ import {
   PaintRoller,
   Zap,
   Crosshair,
-  Rocket,
-  CircleDotDashed,
-  Snowflake,
-  Magnet,
 } from "lucide-react";
 
 const POWER_ICONS: Record<string, typeof Shield> = {
@@ -44,11 +40,6 @@ const POWER_ICONS: Record<string, typeof Shield> = {
   ricochet: CornerUpRight,
   explosive: Bomb,
   roller: PaintRoller,
-  turbo: Rocket,
-  cluster: CircleDotDashed,
-  ink: Snowflake,
-  magnet: Magnet,
-  slow: Snowflake,
 };
 const POWER_SHORT: Record<string, string> = {
   rapid: "OVR",
@@ -57,11 +48,6 @@ const POWER_SHORT: Record<string, string> = {
   ricochet: "RIC",
   explosive: "EXP",
   roller: "ROU",
-  turbo: "TUR",
-  cluster: "GRA",
-  ink: "ENC",
-  magnet: "AIM",
-  slow: "RAL",
 };
 import type { MpHud, MpHudPlayer, MpResult } from "@/game/multiplayer";
 import type { MpMode } from "@/game/mpSim";
@@ -435,7 +421,7 @@ export default function Multiplayer(props: Props) {
                 <ul className="mt-2 space-y-1.5 font-cond text-[12px] font-bold tracking-wide text-moss">
                   <li className="flex gap-2"><PaintBucket className="h-4 w-4 shrink-0 text-cyan-hot" /> Chaque bille manquée peint le court. En versus, repeindre une case la vole.</li>
                   <li className="flex gap-2"><Users className="h-4 w-4 shrink-0 text-lime-hot" /> En coop, reste près d’un coéquipier à terre 1,5 s pour le relever.</li>
-                  <li className="flex gap-2"><PaintBucket className="h-4 w-4 shrink-0 text-lime-hot" /> 11 bonus : bouclier, ricochet, explosif, rouleau, turbo, grappe, encre, aimant, triple, overclock, soin.</li>
+                  <li className="flex gap-2"><PaintBucket className="h-4 w-4 shrink-0 text-lime-hot" /> Bonus : bouclier, ricochet, bille explosive, rouleau de peinture, overclock, triple jet.</li>
                   <li className="flex gap-2"><Trophy className="h-4 w-4 shrink-0 text-gold" /> Le serveur valide tirs, dégâts et scores : pas de triche par le navigateur.</li>
                   <li className="flex gap-2"><Smartphone className="h-4 w-4 shrink-0 text-magenta-hot" /> En ligne mobile : un appareil par joueur, plein écran conseillé.</li>
                 </ul>

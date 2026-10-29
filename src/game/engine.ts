@@ -1,21 +1,5 @@
 import { Sfx } from "./audio";
-import {
-  BONUS,
-  DROP_TABLE,
-  GRAPPE_DMG,
-  GRAPPE_LIFE,
-  GRAPPE_SHOTS,
-  GRAPPE_SPREAD,
-  INK_DURATION,
-  INK_SLOW_DURATION,
-  INK_SLOW_FACTOR,
-  MAGNET_DURATION,
-  MAGNET_SPEED,
-  MAGNET_RADIUS,
-  TURBO_DURATION,
-  TURBO_SPEED,
-  type BonusKind,
-} from "./rules";
+import { BONUS, SOLO_DROP_TABLE, type BonusKind } from "./rules";
 
 /* ------------------------------------------------------------------ *
  * PAINTBALL 2D — top-down arcade paintball arena
@@ -123,8 +107,6 @@ export interface Enemy {
   volley: number;
   stormT: number;
   born: number;
-  /** bonus « encre lente » : touché pendant l'effet, l'ennemi ralentit */
-  slowT?: number;
 }
 
 export interface Bullet {
@@ -264,6 +246,7 @@ export class PaintballGame {
     bloom: 0,
     dashT: 0,
     dashCd: 0,
+    dashBonus: 0,
     dashX: 0,
     dashY: 0,
     tripleT: 0,
@@ -274,10 +257,7 @@ export class PaintballGame {
     explosive: 0,
     rollerT: 0,
     rollerTick: 0,
-    turboT: 0,
-    magnetT: 0,
-    cluster: 0,
-    inkT: 0,
+    comboFreezeT: 0,
     hitFlash: 0,
     step: 0,
     reloadFrom: 0,
@@ -538,13 +518,11 @@ export class PaintballGame {
   };
 
   private get stickR() {
-    // proportionné au plus petit côté : sur un téléphone 456 px de haut,
-    // un rayon de 74 px = un tiers de l'écran (d'où l'encombrement)
-    return Math.round(clamp(Math.min(this.cssW, this.cssH) * 0.1, 40, 56));
-  }
-  /** bas du HUD côté haut : zone jamais occupée par les sticks/boutons */
-  private get hudBottom() {
-    return (this.isTouch ? 88 : 56) + this.safe.t;
+    // On landscape phones the short edge is the limiting dimension, not the width.
+    if (this.isTouch && this.cssW > this.cssH && this.cssH < 560) {
+      return Math.round(clamp(this.cssH * 0.115, 42, 54));
+    }
+    return Math.min(70, Math.max(48, Math.min(this.cssW, this.cssH) * 0.13));
   }
 
   /** insets d'encoche (px CSS) + marges de jeu qui en découlent (unités monde) */
@@ -676,35 +654,36 @@ export class PaintballGame {
     }
   }
 
-  /** cluster de boutons sous le pouce droit + repères des sticks.
-   *  Le cluster est calé en bas à droite, les sticks dans les bandes
-   *  restantes (sous le HUD en haut, marge libre en bas à gauche). */
+  /** cluster de boutons sous le pouce droit + Repères des sticks */
   private layoutTouch() {
     const { cssW, cssH } = this;
     const R = this.stickR;
+    const tight = Math.min(cssW, cssH);
+    const compactLandscape = cssW > cssH && cssH < 560;
     const b = this.btn;
-    // feu dominant, plus jamais qu'un tiers de la hauteur d'écran
-    b.fire.r = Math.round(clamp(Math.min(Math.min(cssW, cssH) * 0.09, cssH * 0.13), 30, 46));
-    b.fire.x = cssW - b.fire.r - 14 - this.safe.r;
-    b.fire.y = cssH - b.fire.r - 14 - this.safe.b;
-    b.dash.r = Math.round(b.fire.r * 0.78);
-    b.dash.x = b.fire.x - b.fire.r - b.dash.r - 8;
-    b.dash.y = b.fire.y - b.fire.r * 0.34;
-    b.reload.r = Math.round(b.fire.r * 0.62);
-    b.reload.x = b.fire.x - b.fire.r * 0.3;
-    b.reload.y = b.fire.y - b.fire.r - b.reload.r - 6;
-
-    // pouce gauche : coin bas-gauche, à l'opposé du cluster
-    this.home.mx = Math.round(16 + this.safe.l + R);
-    this.home.my = Math.round(cssH - 16 - this.safe.b - R);
-
-    // pouce droit : entre le bas du HUD et le haut du cluster
-    const top = this.hudBottom + R + 8;
-    const bot = b.reload.y - b.reload.r - 8 - R;
-    this.home.ax = Math.round(cssW - R - 16 - this.safe.r);
-    this.home.ay = bot > top ? Math.round((top + bot) / 2) : Math.round((this.hudBottom + b.reload.y) / 2);
+    b.fire.r = Math.round(compactLandscape ? clamp(tight * 0.078, 28, 36) : clamp(tight * 0.095, 36, 56));
+    b.fire.x = cssW - b.fire.r - (compactLandscape ? 14 : 16) - this.safe.r;
+    b.fire.y = cssH - b.fire.r - (compactLandscape ? 12 : 18) - this.safe.b;
+    b.dash.r = Math.round(b.fire.r * (compactLandscape ? 0.7 : 0.78));
+    b.dash.x = b.fire.x - b.fire.r - b.dash.r - (compactLandscape ? 5 : 8);
+    b.dash.y = b.fire.y - b.fire.r * (compactLandscape ? 0.38 : 0.42);
+    b.reload.r = Math.round(b.fire.r * (compactLandscape ? 0.55 : 0.64));
+    b.reload.x = b.fire.x - b.fire.r * (compactLandscape ? 0.18 : 0.34);
+    b.reload.y = b.fire.y - b.fire.r - b.reload.r - (compactLandscape ? 3 : 6);
+    // pouce gauche : déplacer — pouce droit : viser (dans la bande libre au-dessus du cluster)
+    this.home.mx = 22 + this.safe.l + R;
+    this.home.my = cssH - 22 - this.safe.b - R;
+    const bandTop = this.safe.t + 64;
+    const bandBot = b.reload.y - b.reload.r - 10;
+    if (compactLandscape) {
+      // Keep the aiming thumb zone clear of the small right-corner action cluster.
+      this.home.ax = clamp(cssW * 0.79, cssW * 0.68, cssW - R - this.safe.r - 90);
+      this.home.ay = clamp(cssH * 0.6, R + 24, cssH - R - 92 - this.safe.b);
+    } else {
+      this.home.ax = Math.max(cssW * 0.6, cssW - 26 - this.safe.r - R);
+      this.home.ay = bandBot - R > bandTop ? bandBot - R : cssH * 0.45;
+    }
   }
-
   private dpr = 1;
 
   private buildArena() {
@@ -1096,6 +1075,7 @@ export class PaintballGame {
       bloom: 0,
       dashT: 0,
       dashCd: 0,
+      dashBonus: 0,
       tripleT: 0,
       rapidT: 0,
       shield: 0,
@@ -1104,10 +1084,7 @@ export class PaintballGame {
       explosive: 0,
       rollerT: 0,
       rollerTick: 0,
-      turboT: 0,
-      magnetT: 0,
-      cluster: 0,
-      inkT: 0,
+      comboFreezeT: 0,
       hitFlash: 0,
       angle: -Math.PI / 2,
     });
@@ -1442,7 +1419,9 @@ export class PaintballGame {
 
   private tryDash() {
     if (this.status !== "playing" || this.dying > 0) return;
-    if (this.p.dashCd > 0 || this.p.dashT > 0) return;
+    const p = this.p;
+    const useBonusDash = p.dashCd > 0 && p.dashBonus > 0;
+    if ((p.dashCd > 0 && !useBonusDash) || p.dashT > 0) return;
     let dx = this.axisX();
     let dy = this.axisY();
     if (dx === 0 && dy === 0) {
@@ -1450,11 +1429,12 @@ export class PaintballGame {
       dy = Math.sin(this.p.angle);
     }
     const l = Math.hypot(dx, dy) || 1;
-    this.p.dashX = dx / l;
-    this.p.dashY = dy / l;
-    this.p.dashT = 0.17;
-    this.p.dashCd = 1.05;
-    this.p.invuln = Math.max(this.p.invuln, 0.34);
+    p.dashX = dx / l;
+    p.dashY = dy / l;
+    p.dashT = 0.17;
+    if (useBonusDash) p.dashBonus--;
+    else p.dashCd = 1.05;
+    p.invuln = Math.max(p.invuln, 0.34);
     this.addTrauma(0.24);
     this.sfx.dash();
     this.buzz(14);
@@ -1471,29 +1451,27 @@ export class PaintballGame {
     p.ammo--;
     p.fireT = p.rapidT > 0 ? 0.062 : 0.108;
     p.bloom = Math.min(0.15, p.bloom + 0.035);
-    const clusterShot = p.cluster > 0;
-    const n = clusterShot ? GRAPPE_SHOTS : p.tripleT > 0 ? 3 : 1;
+    const n = p.tripleT > 0 ? 3 : 1;
     const explosiveShot = p.explosive > 0;
     for (let i = 0; i < n; i++) {
-      const off = clusterShot ? (i / (n - 1) - 0.5) * GRAPPE_SPREAD : n === 1 ? 0 : (i - 1) * 0.13;
-      const a = p.angle + off + rnd(-p.bloom, p.bloom) * (clusterShot ? 1.6 : 1);
-      const spd = clusterShot ? 640 : 700;
+      const off = n === 1 ? 0 : (i - 1) * 0.13;
+      const a = p.angle + off + rnd(-p.bloom, p.bloom);
+      const spd = 700;
       this.bullets.push({
         x: p.x + Math.cos(a) * 20,
         y: p.y + Math.sin(a) * 20,
         vx: Math.cos(a) * spd + p.vx * 0.22,
         vy: Math.sin(a) * spd + p.vy * 0.22,
-        life: clusterShot ? GRAPPE_LIFE : 1.25,
+        life: 1.25,
         r: explosiveShot && i === 0 ? 7 : 5,
-        dmg: clusterShot ? GRAPPE_DMG : 30,
-        color: explosiveShot && i === 0 ? COL.rusher : clusterShot ? BONUS[8].color : COL.player,
+        dmg: 30,
+        color: explosiveShot && i === 0 ? COL.rusher : COL.player,
         foe: false,
         bounces: p.ricochetT > 0 ? 1 : 0,
         explosive: explosiveShot && i === 0,
       });
     }
     this.shots += n;
-    if (clusterShot) p.cluster = Math.max(0, p.cluster - 1);
     if (explosiveShot) p.explosive = Math.max(0, p.explosive - 1);
     // recoil + muzzle fx
     p.vx -= Math.cos(p.angle) * 42;
@@ -1642,7 +1620,6 @@ export class PaintballGame {
     let dt = this.last ? now - this.last : 1 / 60;
     this.last = now;
     if (dt > 1 / 15) dt = 1 / 15;
-    if (!(dt > 0)) dt = 1 / 60;
     const running = this.status === "playing" || this.status === "menu";
     if (this.hitstop > 0) this.hitstop -= dt;
     if (running) {
@@ -1677,10 +1654,8 @@ export class PaintballGame {
     if (p.ricochetT > 0) powers.push({ id: "ricochet", name: "RICOCHET", pct: p.ricochetT / 8, color: COL.sniper });
     if (p.explosive > 0) powers.push({ id: "explosive", name: "EXPLOSIF", pct: 1, color: COL.rusher, charges: p.explosive });
     if (p.rollerT > 0) powers.push({ id: "roller", name: "ROULEAU", pct: p.rollerT / 6, color: COL.lime });
-    if (p.turboT > 0) powers.push({ id: "turbo", name: "TURBO", pct: p.turboT / TURBO_DURATION, color: BONUS[7].color });
-    if (p.cluster > 0) powers.push({ id: "cluster", name: "GRAPPE", pct: 1, color: BONUS[8].color, charges: p.cluster });
-    if (p.inkT > 0) powers.push({ id: "ink", name: "ENCRE", pct: p.inkT / INK_DURATION, color: BONUS[9].color });
-    if (p.magnetT > 0) powers.push({ id: "magnet", name: "AIMANT", pct: p.magnetT / MAGNET_DURATION, color: BONUS[10].color });
+    if (p.dashBonus > 0) powers.push({ id: "dash", name: "DASH GRATUIT", pct: 1, color: "#55ddff", charges: p.dashBonus });
+    if (p.comboFreezeT > 0) powers.push({ id: "comboFreeze", name: "COMBO GELÉ", pct: p.comboFreezeT / 5, color: "#b8e6ff" });
     this.cb.onHud({
       hp: Math.max(0, this.p.hp),
       maxHp: this.p.maxHp,
@@ -1712,7 +1687,7 @@ export class PaintballGame {
       this.updatePlayer(dt);
       this.updateWaves(dt);
       this.updatePickups(dt);
-      this.comboT = Math.max(0, this.comboT - dt);
+      if (this.p.comboFreezeT <= 0) this.comboT = Math.max(0, this.comboT - dt);
       if (this.comboT === 0 && this.streak > 0) this.streak = 0;
     } else {
       this.ghost.a += dt * 0.75;
@@ -1838,7 +1813,7 @@ export class PaintballGame {
       if (Math.random() < 0.9)
         this.part({ kind: 0, x: p.x + rnd(-6, 6), y: p.y + rnd(-6, 6), vx: -p.vx * 0.08, vy: -p.vy * 0.08, life: 0.3, max: 0.3, size: rnd(3, 7), color: COL.player, paint: 1 });
     } else {
-      const spd = 252 * (p.reload > 0 ? 0.86 : 1) * (p.turboT > 0 ? TURBO_SPEED : 1);
+      const spd = 252 * (p.reload > 0 ? 0.86 : 1);
       const tx = mag > 0.02 ? (ax / Math.max(mag, 1)) * spd : 0;
       const ty = mag > 0.02 ? (ay / Math.max(mag, 1)) * spd : 0;
       const k = mag > 0.02 ? 1 - Math.exp(-16 * dt) : 1 - Math.exp(-11 * dt);
@@ -1875,22 +1850,8 @@ export class PaintballGame {
     p.rapidT = Math.max(0, p.rapidT - dt);
     p.ricochetT = Math.max(0, p.ricochetT - dt);
     p.rollerT = Math.max(0, p.rollerT - dt);
+    p.comboFreezeT = Math.max(0, p.comboFreezeT - dt);
     p.shieldT = Math.max(0, p.shieldT - dt);
-    p.turboT = Math.max(0, p.turboT - dt);
-    p.inkT = Math.max(0, p.inkT - dt);
-    p.magnetT = Math.max(0, p.magnetT - dt);
-    if (p.turboT > 0 && Math.hypot(p.vx, p.vy) > 120 && Math.random() < dt * 26) {
-      this.part({
-        x: p.x - p.vx * 0.04 + rnd(-6, 6),
-        y: p.y - p.vy * 0.04 + rnd(-6, 6),
-        vx: -p.vx * 0.16,
-        vy: -p.vy * 0.16,
-        life: 0.3,
-        max: 0.3,
-        size: rnd(2, 5),
-        color: BONUS[7].color,
-      });
-    }
     if (p.shieldT <= 0) p.shield = 0;
     if (p.rollerT > 0 && Math.hypot(p.vx, p.vy) > 60) {
       p.rollerTick -= dt;
@@ -1996,11 +1957,6 @@ export class PaintballGame {
         tvy = -ay * 220;
       }
       e.coolT -= dt;
-      if ((e.slowT ?? 0) > 0) {
-        e.slowT = Math.max(0, (e.slowT ?? 0) - dt);
-        tvx *= INK_SLOW_FACTOR;
-        tvy *= INK_SLOW_FACTOR;
-      }
       const k = 1 - Math.exp(-(e.type === "rusher" ? 7 : 5) * dt);
       e.vx = lerp(e.vx, tvx, k);
       e.vy = lerp(e.vy, tvy, k);
@@ -2181,10 +2137,6 @@ export class PaintballGame {
 
   private damageEnemy(e: Enemy, idx: number, dmg: number, hx: number, hy: number, color: string) {
     this.hits++;
-    if (this.p.inkT > 0 && (e.slowT ?? 0) <= 0.05) {
-      e.slowT = INK_SLOW_DURATION;
-      this.popText(e.x, e.y - e.r - 16, "ENCRE", BONUS[9].color, 15);
-    }
     e.hp -= dmg;
     e.flash = 1;
     const a = Math.atan2(e.y - hy, e.x - hx);
@@ -2247,7 +2199,7 @@ export class PaintballGame {
     const roll = Math.random();
     const chance = e.type === "boss" ? 1 : 0.28;
     if (roll < chance) {
-      const kinds = DROP_TABLE;
+      const kinds = SOLO_DROP_TABLE;
       const kind = e.type === "boss" ? 1 : kinds[(Math.random() * kinds.length) | 0];
       this.pickups.push({ x: e.x, y: e.y, vx: rnd(-40, 40), vy: rnd(-40, 40), t: 13, kind });
     }
@@ -2272,19 +2224,10 @@ export class PaintballGame {
         this.pickups.splice(i, 1);
         continue;
       }
-      if (this.p.magnetT > 0) {
-        const mx = this.p.x - q.x;
-        const my = this.p.y - q.y;
-        const md = Math.hypot(mx, my) || 1;
-        if (md < MAGNET_RADIUS) {
-          const speed = MAGNET_SPEED * (1 - md / MAGNET_RADIUS);
-          q.vx = (mx / md) * speed;
-          q.vy = (my / md) * speed;
-        }
-      }
       if (Math.hypot(q.x - this.p.x, q.y - this.p.y) < this.p.r + 18) {
         this.pickups.splice(i, 1);
         const info = BONUS[q.kind];
+        let pickupText = info.short;
         this.sfx.pickup();
         this.ring(q.x, q.y, info.color, 54, 0.3);
         if (q.kind === 1) {
@@ -2305,15 +2248,16 @@ export class PaintballGame {
         } else if (q.kind === 6) {
           this.p.rollerT = 6;
         } else if (q.kind === 7) {
-          this.p.turboT = TURBO_DURATION;
+          const prime = 250 * Math.max(1, this.wave);
+          this.score += prime;
+          pickupText = `+${prime} PRIME`;
         } else if (q.kind === 8) {
-          this.p.cluster = Math.min(2, this.p.cluster + 1);
+          this.p.dashCd = 0;
+          this.p.dashBonus = 1;
         } else if (q.kind === 9) {
-          this.p.inkT = INK_DURATION;
-        } else if (q.kind === 10) {
-          this.p.magnetT = MAGNET_DURATION;
+          this.p.comboFreezeT = 5;
         }
-        this.popText(q.x, q.y - 10, info.short, info.color, 20);
+        this.popText(q.x, q.y - 10, pickupText, info.color, 20);
         this.score += 60;
         this.flash("#ffffff", 0.14);
         this.buzz(10);
@@ -2569,33 +2513,29 @@ export class PaintballGame {
       ctx.fillRect(-7, -5, 10, 6);
       ctx.beginPath(); ctx.moveTo(3, -2); ctx.lineTo(7, -2); ctx.lineTo(7, 5); ctx.stroke();
     } else if (q.kind === 7) {
-      // turbo : éclair
-      ctx.beginPath();
-      ctx.moveTo(-5, -7); ctx.lineTo(2.5, -1); ctx.lineTo(-1.5, -1); ctx.lineTo(5, 7); ctx.lineTo(-3, 2); ctx.lineTo(1, 2);
-      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, 6, 0, TAU); ctx.stroke();
+      ctx.font = "800 10px Barlow, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("$", 0, 1);
     } else if (q.kind === 8) {
-      // grappe : volée de billes
-      for (const [dx, dy] of [[-6, 4], [-1, 4.6], [4, 3.4], [-3.5, -3], [3, -4]]) {
-        ctx.beginPath(); ctx.arc(dx, dy, 2.4, 0, TAU); ctx.fill();
-      }
+      ctx.beginPath();
+      ctx.moveTo(1, -7); ctx.lineTo(-5, 1); ctx.lineTo(-1, 1);
+      ctx.lineTo(-2, 7); ctx.lineTo(5, -2); ctx.lineTo(1, -2); ctx.closePath();
+      ctx.fill();
     } else if (q.kind === 9) {
-      // encre : goutte
-      ctx.beginPath();
-      ctx.moveTo(0, -7); ctx.quadraticCurveTo(6.5, 0.5, 0, 5.5); ctx.quadraticCurveTo(-6.5, 0.5, 0, -7);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "rgba(11,18,16,0.6)";
-      ctx.beginPath(); ctx.arc(-1.6, 1.6, 1.8, 0, TAU); ctx.fill();
-    } else if (q.kind === 10) {
-      // aimant : fer à cheval
-      ctx.lineWidth = 3.4;
-      ctx.beginPath();
-      ctx.arc(0, -1, 5.5, Math.PI, TAU);
-      ctx.stroke();
-      ctx.fillRect(-7.2, -1, 3.4, 6);
-      ctx.fillRect(3.8, -1, 3.4, 6);
-      ctx.fillStyle = "rgba(11,18,16,0.75)";
-      ctx.fillRect(-7.2, 3.4, 3.4, 2.4);
-      ctx.fillRect(3.8, 3.4, 3.4, 2.4);
+      for (let a = 0; a < 3; a++) {
+        ctx.save();
+        ctx.rotate((a * Math.PI) / 3);
+        ctx.beginPath();
+        ctx.moveTo(0, -7); ctx.lineTo(0, 7);
+        ctx.moveTo(0, -5); ctx.lineTo(-2, -3);
+        ctx.moveTo(0, -5); ctx.lineTo(2, -3);
+        ctx.moveTo(0, 5); ctx.lineTo(-2, 3);
+        ctx.moveTo(0, 5); ctx.lineTo(2, 3);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
     ctx.rotate(-Math.sin(this.time * 3 + q.y) * 0.12);
     ctx.font = "800 9px 'Barlow Semi Condensed', Barlow, sans-serif";
@@ -2865,20 +2805,6 @@ export class PaintballGame {
       ctx.globalAlpha = 1;
     }
 
-    // encre lente : anneau violet autour de l'ennemi
-    if ((e.slowT ?? 0) > 0) {
-      ctx.save();
-      ctx.globalAlpha = 0.75;
-      ctx.strokeStyle = BONUS[9].color;
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([5, 6]);
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.r + 7, this.time * 2.4, this.time * 2.4 + TAU * 0.85);
-      ctx.stroke();
-      ctx.restore();
-      ctx.globalAlpha = 1;
-    }
-
     // hp pip bar
     if (e.hp < e.maxHp) {
       const w = e.r * 2.2;
@@ -2953,6 +2879,7 @@ export class PaintballGame {
   private drawTouch(ctx: CanvasRenderingContext2D) {
     const R = this.stickR;
     const showSticks = this.status === "playing";
+    const compactLandscape = this.cssW > this.cssH && this.cssH < 560;
     const b = this.btn;
 
     const stick = (
@@ -2973,7 +2900,7 @@ export class PaintballGame {
       ctx.fill();
       ctx.globalAlpha = (st.active ? 0.8 : 0.34) * a;
       ctx.strokeStyle = col;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = compactLandscape ? 1.6 : 2.5;
       ctx.setLineDash(st.active ? [] : [7, 8]);
       ctx.beginPath();
       ctx.arc(bx, by, R, 0, TAU);
@@ -2986,7 +2913,7 @@ export class PaintballGame {
         ctx.translate(bx, by);
         ctx.rotate((i * Math.PI) / 2);
         ctx.beginPath();
-        ctx.moveTo(R - 9, 0);
+        ctx.moveTo(R - (compactLandscape ? 7 : 9), 0);
         ctx.lineTo(R - 2, 0);
         ctx.stroke();
         ctx.restore();
@@ -3009,14 +2936,12 @@ export class PaintballGame {
       ctx.arc(kx, ky, R * 0.19, 0, TAU);
       ctx.fill();
       if (!st.active && label) {
-        const size = Math.round(clamp(R * 0.24, 9, 12));
-        const ly = Math.max(this.hudBottom + 6, by - R - 9);
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.55;
         ctx.fillStyle = col;
-        ctx.font = `700 ${size}px "Barlow Semi Condensed", Barlow, sans-serif`;
+        ctx.font = `700 ${Math.round(R * (compactLandscape ? 0.2 : 0.26))}px "Barlow Semi Condensed", Barlow, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(label, bx, ly);
+        ctx.fillText(label, bx, by + R + (compactLandscape ? 7 : 12));
       }
       ctx.restore();
       ctx.globalAlpha = 1;
@@ -3050,16 +2975,16 @@ export class PaintballGame {
       ctx.arc(bb.x, bb.y, rr, 0, TAU);
       ctx.fill();
       ctx.strokeStyle = col;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = compactLandscape ? 1.8 : 2.5;
       ctx.beginPath();
       ctx.arc(bb.x, bb.y, rr, 0, TAU);
       ctx.stroke();
       if (prog > 0.001) {
         ctx.globalAlpha = 0.95;
         ctx.strokeStyle = col;
-        ctx.lineWidth = 4;
+        ctx.lineWidth = compactLandscape ? 2.5 : 4;
         ctx.beginPath();
-        ctx.arc(bb.x, bb.y, rr + 5, -Math.PI / 2, -Math.PI / 2 + clamp(prog, 0, 1) * TAU);
+        ctx.arc(bb.x, bb.y, rr + (compactLandscape ? 3 : 5), -Math.PI / 2, -Math.PI / 2 + clamp(prog, 0, 1) * TAU);
         ctx.stroke();
       }
       ctx.globalAlpha = held ? 1 : 0.8;
@@ -3067,14 +2992,14 @@ export class PaintballGame {
       ctx.translate(bb.x, bb.y - (label ? 4 : 0));
       ctx.strokeStyle = col;
       ctx.fillStyle = col;
-      ctx.lineWidth = 2.6;
+      ctx.lineWidth = compactLandscape ? 1.8 : 2.6;
       ctx.lineCap = "round";
       icon(ctx, rr);
       ctx.restore();
       if (label) {
         ctx.globalAlpha = 0.75;
         ctx.fillStyle = col;
-        ctx.font = `700 ${Math.round(clamp(rr * 0.34, 9, 13))}px "Barlow Semi Condensed", Barlow, sans-serif`;
+        ctx.font = `700 ${Math.round(rr * 0.36)}px "Barlow Semi Condensed", Barlow, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(label, bb.x, bb.y + rr * 0.5);
@@ -3100,7 +3025,7 @@ export class PaintballGame {
           g.beginPath();
           g.arc(0, 0, r * 0.14, 0, TAU);
           g.fill();
-          g.font = `800 ${Math.round(clamp(r * 0.4, 11, 17))}px "Barlow Semi Condensed", Barlow, sans-serif`;
+        g.font = `800 ${Math.round(r * (compactLandscape ? 0.36 : 0.42))}px "Barlow Semi Condensed", Barlow, sans-serif`;
           g.textAlign = "center";
           g.textBaseline = "alphabetic";
           g.globalAlpha = 0.9;
@@ -3114,7 +3039,7 @@ export class PaintballGame {
         g.lineTo(-r * 0.1, -r * 0.06);
         g.lineTo(r * 0.12, r * 0.34);
         g.stroke();
-        g.font = `700 ${Math.round(clamp(r * 0.38, 9, 13))}px "Barlow Semi Condensed", Barlow, sans-serif`;
+        g.font = `700 ${Math.round(r * (compactLandscape ? 0.29 : 0.4))}px "Barlow Semi Condensed", Barlow, sans-serif`;
         g.textAlign = "center";
         g.globalAlpha = 0.8;
         g.fillText("DASH", 0, r * 0.78);
@@ -3133,7 +3058,7 @@ export class PaintballGame {
     }
 
     // --- gestuelle du premier lancement ----------------------------------
-    if (this.tutorialT > 0 && showSticks) {
+    if (this.tutorialT > 0 && showSticks && !compactLandscape) {
       const a = clamp(this.tutorialT / 1.2, 0, 1);
       const pulse = 0.5 + 0.5 * Math.sin(this.time * 5);
       const hint = (x: number, y: number, text: string, col: string, dir: number) => {
@@ -3150,7 +3075,7 @@ export class PaintballGame {
         ctx.arc(x + dir * 26 * pulse, y, 7, 0, TAU);
         ctx.fill();
         ctx.globalAlpha = 0.9 * a;
-        ctx.font = `800 ${Math.round(clamp(this.cssW * 0.011, 10, 13))}px "Barlow Semi Condensed", Barlow, sans-serif`;
+        ctx.font = `800 13px "Barlow Semi Condensed", Barlow, sans-serif`;
         ctx.textAlign = "center";
         ctx.fillStyle = col;
         ctx.strokeStyle = "rgba(5,16,13,0.9)";
@@ -3162,7 +3087,7 @@ export class PaintballGame {
       };
       hint(this.home.mx, this.home.my, "GLISSE POUR BOUGER", COL.player, 1);
       hint(this.home.ax, this.home.ay, "GLISSE POUR VISER", COL.grunt, -1);
-      hint(b.fire.x, b.fire.y - b.fire.r - 14, "MAINTIENS POUR TIRER", COL.chalk, -1);
+      hint(b.fire.x, b.fire.y - b.fire.r - 8, "MAINTIENS POUR TIRER", COL.chalk, -1);
     }
   }
 

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { cleanName } from "@/lib/scores";
 import type { SavedRun } from "@/game/engine";
 
 export type GameMode = "solo" | "coop" | "versus";
@@ -102,9 +101,6 @@ export function gradeFor(totalScore: number, bestWave: number) {
 }
 
 const SAVE_KEY = "pb2d.save.solo";
-
-const localPlayerName = () => cleanName(localStorage.getItem("pb.name") || "JOUEUR");
-const isDefaultName = (n?: string | null) => !n || /^JOUEUR(-[0-9A-Fa-f]{4})?$/i.test(n);
 
 function readLocalSave(): SavedRun | null {
   try {
@@ -210,38 +206,6 @@ export function useProgression() {
     setLeaders((prev) => ({ ...prev, [mode]: (data ?? []) as LeaderRow[] }));
   }, []);
 
-  /** Écrit le pseudo sans jamais dépendre d'une ligne profil déjà présente. */
-  const pushName = useCallback(
-    async (raw: string) => {
-      const clean = cleanName(raw);
-      localStorage.setItem("pb.name", clean);
-      if (!userId) return clean;
-      setProfile((p) => (p ? { ...p, display_name: clean, settings: { ...p.settings, name: clean } } : p));
-
-      // Fonction SQL dédiée (migration 0003). Si elle n'est pas encore installée,
-      // on retombe sur un upsert RLS classique.
-      const rpc = await supabase.rpc("set_profile_name", { p_name: clean });
-      if (!rpc.error && rpc.data) {
-        setProfile(rpc.data as Profile);
-        setLastSync(Date.now());
-        return clean;
-      }
-
-      const up = await supabase
-        .from("profiles")
-        .upsert({ id: userId, display_name: clean }, { onConflict: "id" })
-        .select("*")
-        .single();
-      if (up.error) setError(friendlyDbError(up.error.message));
-      else {
-        setProfile(up.data as Profile);
-        setLastSync(Date.now());
-      }
-      return clean;
-    },
-    [userId]
-  );
-
   const refresh = useCallback(async () => {
     if (!userId) return;
     setBusy(true);
@@ -251,16 +215,19 @@ export function useProgression() {
       supabase.from("runs").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(12),
     ]);
     if (p.error) setError(friendlyDbError(p.error.message));
-    else if (p.data) {
-      const prof = p.data as Profile;
-      setProfile(prof);
-      // répare un pseudo technique si le joueur a déjà choisi un nom localement
-      const local = localPlayerName();
-      if (isDefaultName(prof.display_name) && !isDefaultName(local)) void pushName(local);
-    } else {
-      // filet de sécurité si le déclencheur n'a pas encore créé le profil :
-      // on crée avec le nom local, sans écraser un profil existant.
-      await pushName(localPlayerName());
+    else if (p.data) setProfile(p.data as Profile);
+    else {
+      // filet de sécurité si le déclencheur n'a pas encore créé le profil
+      const known = (localStorage.getItem("pb.name") || "").trim().slice(0, 16);
+      const fallback = {
+        id: userId,
+        display_name: known || "JOUEUR",
+        paint_color: "#3ee8ff",
+        settings: known ? { name: known } : {},
+        progress: {},
+      };
+      const ins = await supabase.from("profiles").upsert(fallback).select("*").single();
+      if (ins.data) setProfile(ins.data as Profile);
     }
     if (s.error) setError(friendlyDbError(s.error.message));
     else setStats((s.data as PlayerStats) ?? null);
@@ -268,7 +235,7 @@ export function useProgression() {
     setBusy(false);
     setLastSync(Date.now());
     void loadLeaderboard("solo");
-  }, [userId, loadLeaderboard, pushName]);
+  }, [userId, loadLeaderboard]);
 
   const doRecord = useCallback(
     async (input: RunInput) => {
@@ -314,9 +281,10 @@ export function useProgression() {
   const enableGuest = useCallback(async () => {
     setBusy(true);
     setError(null);
-    const { error: e } = await supabase.auth.signInAnonymously({
-      options: { data: { display_name: localPlayerName() } },
-    });
+    const saved = (localStorage.getItem("pb.name") || "").trim().slice(0, 16);
+    const { error: e } = await supabase.auth.signInAnonymously(
+      saved ? { options: { data: { display_name: saved } } } : undefined
+    );
     setBusy(false);
     if (e) setError(friendlyAuthError(e.message));
   }, []);
@@ -331,10 +299,7 @@ export function useProgression() {
     setError(null);
     const { error: e } = await supabase.auth.signInWithOtp({
       email: clean,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { display_name: localPlayerName() },
-      },
+      options: { emailRedirectTo: window.location.origin },
     });
     setBusy(false);
     if (e) setError(friendlyAuthError(e.message));
@@ -388,9 +353,21 @@ export function useProgression() {
 
   const rename = useCallback(
     async (name: string) => {
-      await pushName(name);
+      const cleaned = name
+        .replace(/[^\p{L}\p{N} _-]/gu, "")
+        .replace(/\s{2,}/g, " ")
+        .trim()
+        .slice(0, 16);
+      // champ vidé : on garde le nom connu plutôt que de basculer sur « JOUEUR »
+      const clean = cleaned || localStorage.getItem("pb.name") || profile?.display_name || "JOUEUR";
+      localStorage.setItem("pb.name", clean);
+      if (!userId) return;
+      setProfile((p) => (p ? { ...p, display_name: clean, settings: { ...p.settings, name: clean } } : p));
+      const { error: e } = await supabase.from("profiles").update({ display_name: clean }).eq("id", userId);
+      if (e) setError(friendlyDbError(e.message));
+      else setLastSync(Date.now());
     },
-    [pushName]
+    [userId]
   );
 
   const setColor = useCallback(
@@ -501,19 +478,10 @@ export function useProgression() {
     }
   }, [userId]);
 
-  const localName = localPlayerName();
-  const displayName =
-    profile && !isDefaultName(profile.display_name)
-      ? profile.display_name
-      : !isDefaultName(localName)
-        ? localName
-        : "JOUEUR";
-
   return {
     status,
     session,
     profile,
-    displayName,
     stats,
     runs,
     leaders,
