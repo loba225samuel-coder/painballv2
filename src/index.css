@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Bungee", "Barlow", sans-serif;
+  --font-body: "Barlow", system-ui, sans-serif;
+  --font-cond: "Barlow Semi Condensed", "Barlow", sans-serif;
+
+  --color-court-900: #070d0b;
+  --color-court-800: #0b1210;
+  --color-court-700: #101a17;
+  --color-court-600: #16231e;
+  --color-court-500: #1d2f28;
+  --color-line: #2c4740;
+  --color-chalk: #e9f5ee;
+  --color-moss: #8aa99b;
+  --color-cyan-hot: #3ee8ff;
+  --color-magenta-hot: #ff2f87;
+  --color-orange-hot: #ff8a1e;
+  --color-lime-hot: #b9ff33;
+  --color-violet-hot: #a86bff;
+  --color-gold: #ffd84d;
+}
+
+/* zones à protéger sur mobile (encoche, coins arrondis, barre d'accueil) */
+:root {
+  --sa-t: env(safe-area-inset-top, 0px);
+  --sa-r: env(safe-area-inset-right, 0px);
+  --sa-b: env(safe-area-inset-bottom, 0px);
+  --sa-l: env(safe-area-inset-left, 0px);
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: #070d0b;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#root {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* sur mobile, la page est figée : ni élastique, ni barre d'URL qui bouge */
+@media (hover: none) and (pointer: coarse) {
+  html,
+  body,
+  #root {
+    position: fixed;
+    inset: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+  .btn {
+    min-height: 46px;
+    font-size: 15px;
+  }
+  .panel {
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(233, 245, 238, 0.06);
+  }
+}
+
+.pad-hud-t {
+  padding-top: calc(0.6rem + var(--sa-t));
+}
+.pad-hud-b {
+  padding-bottom: calc(0.6rem + var(--sa-b));
+}
+.pad-hud-l {
+  padding-left: calc(0.6rem + var(--sa-l));
+}
+.pad-hud-r {
+  padding-right: calc(0.6rem + var(--sa-r));
+}
+
+/* les écrans de menu gardent de l'air, tout en fuyant l'encoche */
+.pad-menu-t {
+  padding-top: max(1.75rem, calc(1.25rem + var(--sa-t)));
+}
+.pad-menu-b {
+  padding-bottom: max(1.75rem, calc(1.25rem + var(--sa-b)));
+}
+
+canvas {
+  -webkit-touch-callout: none;
+}
+
+@supports (height: 100dvh) {
+  #root {
+    height: 100dvh;
+  }
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-chalk);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+.font-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* chunky arcade panel: hard border + offset slab shadow */
+.panel {
+  background: linear-gradient(180deg, rgba(23, 38, 33, 0.96), rgba(11, 20, 17, 0.97));
+  border: 2px solid var(--color-line);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(233, 245, 238, 0.06);
+}
+
+.btn {
+  position: relative;
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  border: 2px solid #05100d;
+  box-shadow: 0 5px 0 #05100d;
+  transition: transform 0.09s cubic-bezier(0.2, 0.9, 0.3, 1.4), box-shadow 0.09s ease, filter 0.2s ease;
+}
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 0 #05100d;
+  filter: brightness(1.12);
+}
+.btn:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #05100d;
+}
+
+.slash {
+  clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%);
+}
+
+.stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 216, 77, 0.85) 0 10px,
+    rgba(11, 18, 16, 0.85) 10px 20px
+  );
+}
+
+.noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.055;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/></filter><rect width='120' height='120' filter='url(%23n)'/></svg>");
+}
+
+.scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.6) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px
+  );
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.anim-in {
+  animation: floatIn 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) rotate(-4deg);
+  }
+  60% {
+    transform: scale(1.06) rotate(1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+.anim-pop {
+  animation: popIn 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    transform: rotate(-1.2deg) translateY(0);
+  }
+  50% {
+    transform: rotate(1.2deg) translateY(-4px);
+  }
+}
+.anim-wobble {
+  animation: wobble 3.4s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0.25;
+  }
+}
+.anim-blink {
+  animation: blink 1.1s steps(1, end) infinite;
+}
+
+@keyframes driftSplat {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(0.9);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(30px, -60px, 0) rotate(40deg) scale(1.35);
+    opacity: 0;
+  }
+}
+.anim-drift {
+  animation: driftSplat linear infinite;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #2c4740;
+}
+
+@keyframes slowspin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.anim-spin-slow {
+  animation: slowspin 3.6s linear infinite;
+}
+
+/* l'input du tableau des scores : jamais de zoom automatique sur iOS */
+input {
+  font-size: 16px;
+}
