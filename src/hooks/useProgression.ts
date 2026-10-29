@@ -218,7 +218,14 @@ export function useProgression() {
     else if (p.data) setProfile(p.data as Profile);
     else {
       // filet de sécurité si le déclencheur n'a pas encore créé le profil
-      const fallback = { id: userId, display_name: "JOUEUR", paint_color: "#3ee8ff", settings: {}, progress: {} };
+      const known = (localStorage.getItem("pb.name") || "").trim().slice(0, 16);
+      const fallback = {
+        id: userId,
+        display_name: known || "JOUEUR",
+        paint_color: "#3ee8ff",
+        settings: known ? { name: known } : {},
+        progress: {},
+      };
       const ins = await supabase.from("profiles").upsert(fallback).select("*").single();
       if (ins.data) setProfile(ins.data as Profile);
     }
@@ -274,7 +281,10 @@ export function useProgression() {
   const enableGuest = useCallback(async () => {
     setBusy(true);
     setError(null);
-    const { error: e } = await supabase.auth.signInAnonymously();
+    const saved = (localStorage.getItem("pb.name") || "").trim().slice(0, 16);
+    const { error: e } = await supabase.auth.signInAnonymously(
+      saved ? { options: { data: { display_name: saved } } } : undefined
+    );
     setBusy(false);
     if (e) setError(friendlyAuthError(e.message));
   }, []);
@@ -343,7 +353,13 @@ export function useProgression() {
 
   const rename = useCallback(
     async (name: string) => {
-      const clean = name.replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 16) || "JOUEUR";
+      const cleaned = name
+        .replace(/[^\p{L}\p{N} _-]/gu, "")
+        .replace(/\s{2,}/g, " ")
+        .trim()
+        .slice(0, 16);
+      // champ vidé : on garde le nom connu plutôt que de basculer sur « JOUEUR »
+      const clean = cleaned || localStorage.getItem("pb.name") || profile?.display_name || "JOUEUR";
       localStorage.setItem("pb.name", clean);
       if (!userId) return;
       setProfile((p) => (p ? { ...p, display_name: clean, settings: { ...p.settings, name: clean } } : p));

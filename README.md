@@ -100,10 +100,7 @@ Conception mobile :
 
 ### 2.4 Multijoueur
 
-> **État actuel : temporairement désactivé dans l’interface.**  
-> Le bouton est visible mais marqué **« Bientôt disponible »**. Le code du multijoueur est conservé pour une réactivation prochaine.
-
-Depuis l’accueil, **MULTIJOUEUR** ouvrira un écran dédié.
+Depuis l’accueil, **MULTIJOUEUR** ouvre un écran dédié.
 
 | Mode | Principe |
 | --- | --- |
@@ -500,7 +497,53 @@ Les vérifications réseau et moteur ont été faites avec des scénarios headle
 
 ---
 
-## 11. Pistes d’évolution
+## 11. Chiffres du jeu et commandes
+
+### Les valeurs exactes
+
+| Élément | Valeur |
+| --- | --- |
+| Vie | 6 peintures · 1,15 s d'invulnérabilité après un éclat |
+| Chargeur | 12 billes · recharge 0,95 s (manuelle ou auto à zéro) |
+| Cadence | 0,108 s par tir · 0,062 s en OVERCLOCK |
+| Dash | 0,17 s de propulsion · 1,05 s de recharge · 0,34 s d'invulnérabilité |
+| Combo | x1 → x7, seuils à 2 / 4 / 7 / 11 / 16 / 22 splats enchaînés · fenêtre 3,4 s |
+| Bonus de vague | 220 × vague + couverture de peinture × 1 400, et +1 PV |
+| Adversaires | GRAUNT 60 PV / 120 pts · RUSHER 48 PV / 170 pts · SNIPER 52 PV / 220 pts · BOSS 420 PV / 1 600 pts |
+| Vagues | 3 + 1,7 × n adversaires · boss toutes les 5 vagues |
+| Drops | 24 % à la mort d'un adversaire · 100 % premium sur un boss |
+| Ramassages | OVERCLOCK (5 s) · TRIPLE STREAM (9 s) · +PAINT (2 PV) · BOUCLIER (2 éclats) · RICOCHET (3 rebonds, 12 s) · BILLE EXPLOSIVE (zone, 9 s) · ROULEAU (instantané) |
+
+### Les commandes
+
+| Clavier | Action | Tactile |
+| --- | --- | --- |
+| `W A S D` / flèches | Se déplacer | Glisser sur la moitié gauche |
+| Souris | Viser | Glisser sur la moitié droite (tir automatique) |
+| `Clic` / `Espace` | Arroser | — |
+| `Maj` | Dash + invulnérabilité | Pad **DASH** |
+| `R` | Recharger | Pad **CHARGE** |
+| `P` / `Échap` | Pause | Bouton pause |
+| `M` / `V` / `F` | Son / vibration / plein écran | Boutons dédiés |
+
+En **duo local**, le pilote 2 joue aux flèches, tire avec `Entrée`, dash avec `Maj droit` et recharge avec `.`.
+
+### Ce que stocke la base
+
+Les migrations [`supabase/migrations/`](./supabase/migrations) créent notamment :
+
+| `player_stats` | — |
+| `profiles` | — |
+| `runs` | — |
+| `saved_runs` | — |
+
+Les écritures passent par des fonctions SQL (une partie terminée dépose la ligne **et** met à jour la
+progression en une seule requête), et les politiques **RLS** garantissent que chacun n'écrit que ses
+propres lignes — les classements restent publics, un score déposé ne peut plus être modifié.
+
+---
+
+## 12. Pistes d’évolution
 
 Quelques suites naturelles :
 
@@ -517,7 +560,7 @@ Quelques suites naturelles :
 
 ---
 
-## 12. Auteur
+## 13. Auteur
 
 Projet développé par **loba225samuel-coder**.  
 Dépôt : <https://github.com/loba225samuel-coder/painballv2>

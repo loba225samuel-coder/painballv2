@@ -143,14 +143,6 @@ canvas {
   transform: translateY(4px);
   box-shadow: 0 1px 0 #05100d;
 }
-.btn:disabled,
-.btn:disabled:hover,
-.btn:disabled:active {
-  transform: none;
-  filter: none;
-  cursor: not-allowed;
-  box-shadow: 0 5px 0 #05100d;
-}
 
 .slash {
   clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%);
